@@ -40,7 +40,7 @@ BAR_FACE_X = -14.13
 BAR_CENTRE_Y = -269.72   # midpoint of that bar along its length
 BAR_MID_Z = 180.0        # bar mid-height (frame revised 2026-07-29: was 250)
 HOLDER_YAW = math.pi / 2
-BORE_LOCAL = (0.0, 35.0)  # bore centre in holder x,y
+BORE_LOCAL = (0.0, 133.0)  # bore centre in holder x,y (cantilever holder)
 
 
 def rotz(yaw, v):

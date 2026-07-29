@@ -39,8 +39,7 @@ GRIPPER_CLOSED = -0.55
 
 # --- the timeline. (label, duration_s, waypoint_key, gripper, attached) ------
 TIMELINE = [
-    ("home",            1.5, "home",      GRIPPER_OPEN,   False),
-    ("go to syringe",   2.5, "pregrasp",  GRIPPER_OPEN,   False),
+    ("start",           1.0, "pregrasp",  GRIPPER_OPEN,   False),
     ("approach",        1.5, "grasp",     GRIPPER_OPEN,   False),
     ("close gripper",   1.0, "grasp",     GRIPPER_CLOSED, False),
     ("pick up",         1.5, "lift",      GRIPPER_CLOSED, True),
@@ -49,6 +48,7 @@ TIMELINE = [
     ("open gripper",    1.0, "place",     GRIPPER_OPEN,   True),
     ("retreat",         1.5, "preplace",  GRIPPER_OPEN,   False),
     ("home",            2.0, "home",      GRIPPER_OPEN,   False),
+    ("return",          1.5, "pregrasp",  GRIPPER_OPEN,   False),
 ]
 
 
@@ -214,15 +214,21 @@ class Sequence(Node):
         approach = np.array([bore[0], bore[1], 0.0])
         approach = approach / (np.linalg.norm(approach) or 1.0)   # base -> bore
         targets = {
+            # derived rest pose: backed off along the approach axis and raised.
+            # Placed at the END of the cycle so the arm still starts by moving
+            # towards the pipette, never away from it.
+            "home":     grasp - approach * 0.20 + np.array([0, 0, 0.08]),
             "pregrasp": grasp - approach * 0.085,
             "grasp":    grasp,
             "lift":     grasp - approach * 0.02 + np.array([0, 0, 0.09]),
             "preplace": np.array(place) + np.array([0, 0, 0.10]),
             "place":    np.array(place),
         }
-        out = {"home": np.array([0.0, -0.6, 1.2, -0.6, 0.0, 0.0])}
-        q = out["home"].copy()
-        for k in ["pregrasp", "grasp", "lift", "preplace", "place"]:
+        # No "home" waypoint: the cycle starts and ends at pregrasp, so the
+        # arm never reverses away from the pipette before approaching it.
+        out = {}
+        q = np.array([0.0, -0.6, 1.2, -0.6, 0.0, 0.0])   # IK seed only
+        for k in ["home", "pregrasp", "grasp", "lift", "preplace", "place"]:
             q, err = self.solve_pose(targets[k], q)
             out[k] = q.copy()
             msg = "  %-9s target %s  residual %.1f mm" % (
@@ -258,7 +264,7 @@ class Sequence(Node):
             acc += dur
             prev_key, prev_grip = key, g
         if q is None:
-            q, grip, attached, label = self.wp["home"], GRIPPER_OPEN, False, "home"
+            q, grip, attached, label = self.wp["pregrasp"], GRIPPER_OPEN, False, "start"
 
         if attached != self.last_attached:
             self.attach_pub.publish(Bool(data=bool(attached)))

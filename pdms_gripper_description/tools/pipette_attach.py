@@ -27,7 +27,7 @@ from rclpy.node import Node
 from std_msgs.msg import Bool
 from geometry_msgs.msg import TransformStamped
 from visualization_msgs.msg import Marker
-from tf2_ros import TransformBroadcaster
+from tf2_ros import Buffer, TransformBroadcaster, TransformListener
 
 MESH = "package://pdms_gripper_description/meshes/assembled_pipette.dae"
 
@@ -83,6 +83,13 @@ class PipetteAttach(Node):
         self.declare_parameter("grasp_rpy", GRASP_RPY)
 
         self.attached = False
+        # Captured at the instant of the grasp: the pipette's pose relative to
+        # gripper_base right then. Using this instead of a hardcoded offset
+        # means the pipette is picked up exactly where it stood - no jump, and
+        # no guessing where the fork clamping midpoint is.
+        self.grasp_tf = None
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
         self.br = TransformBroadcaster(self)
         self.marker_pub = self.create_publisher(Marker, "/pipette/marker", 1)
         self.create_subscription(Bool, "/pipette/attach", self.on_attach, 1)
@@ -90,14 +97,39 @@ class PipetteAttach(Node):
         self.get_logger().info("pipette in holder; publish /pipette/attach to grasp")
 
     def on_attach(self, msg):
-        if msg.data != self.attached:
-            self.attached = msg.data
-            self.get_logger().info("pipette %s" % ("GRASPED" if msg.data else "RELEASED"))
+        if msg.data == self.attached:
+            return
+        if msg.data:
+            self.grasp_tf = self.capture_grasp()
+        self.attached = msg.data
+        self.get_logger().info("pipette %s" % ("GRASPED" if msg.data else "RELEASED"))
+
+    def capture_grasp(self):
+        """Pose of `pipette` in `gripper_base` at this moment, via TF."""
+        import rclpy.time
+        try:
+            t = self.tf_buffer.lookup_transform(
+                self.get_parameter("grasp_frame").value, "pipette",
+                rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=0.5))
+        except Exception as e:
+            self.get_logger().warn("grasp capture failed (%s); using default offset" % e)
+            return None
+        tr = t.transform.translation
+        q = t.transform.rotation
+        self.get_logger().info("  captured grasp offset xyz=(%.4f, %.4f, %.4f)"
+                               % (tr.x, tr.y, tr.z))
+        return ([tr.x, tr.y, tr.z], [q.x, q.y, q.z, q.w])
 
     def _p(self, n):
         return list(self.get_parameter(n).value)
 
     def tick(self):
+        if self.attached and self.grasp_tf is not None:
+            parent = self.get_parameter("grasp_frame").value
+            xyz, quat = self.grasp_tf
+            self.send(parent, xyz, quat)
+            self.publish_marker()
+            return
         if self.attached:
             parent = self.get_parameter("grasp_frame").value
             xyz, rpy = self._p("grasp_xyz"), self._p("grasp_rpy")
@@ -105,19 +137,23 @@ class PipetteAttach(Node):
             parent = self.get_parameter("held_frame").value
             xyz, rpy = self._p("held_xyz"), self._p("held_rpy")
 
-        now = self.get_clock().now().to_msg()
+        self.send(parent, xyz, quat_from_rpy(*[float(v) for v in rpy]))
+        self.publish_marker()
+
+    def send(self, parent, xyz, quat):
         t = TransformStamped()
-        t.header.stamp = now
+        t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = parent
         t.child_frame_id = "pipette"
         t.transform.translation.x = float(xyz[0])
         t.transform.translation.y = float(xyz[1])
         t.transform.translation.z = float(xyz[2])
-        q = quat_from_rpy(*[float(v) for v in rpy])
-        t.transform.rotation.x, t.transform.rotation.y = q[0], q[1]
-        t.transform.rotation.z, t.transform.rotation.w = q[2], q[3]
+        t.transform.rotation.x, t.transform.rotation.y = float(quat[0]), float(quat[1])
+        t.transform.rotation.z, t.transform.rotation.w = float(quat[2]), float(quat[3])
         self.br.sendTransform(t)
 
+    def publish_marker(self):
+        now = self.get_clock().now().to_msg()
         m = Marker()
         m.header.frame_id = "pipette"
         m.header.stamp = now
