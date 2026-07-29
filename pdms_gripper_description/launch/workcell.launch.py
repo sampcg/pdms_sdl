@@ -13,7 +13,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.conditions import IfCondition, UnlessCondition
-from launch.substitutions import Command, LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -30,6 +30,9 @@ def generate_launch_description():
         default_value=os.path.join(pkg, "config", "workcell.rviz"),
     )
     gui_arg = DeclareLaunchArgument(name="gui", default_value="true")
+    seq_arg = DeclareLaunchArgument(
+        name="sequence", default_value="false",
+        description="true = run the timed pick-and-place instead of the sliders")
 
     robot_description = ParameterValue(
         Command(["xacro ", LaunchConfiguration("model")]), value_type=str
@@ -39,6 +42,7 @@ def generate_launch_description():
         model_arg,
         rviz_arg,
         gui_arg,
+        seq_arg,
         Node(
             package="robot_state_publisher",
             executable="robot_state_publisher",
@@ -47,17 +51,27 @@ def generate_launch_description():
         Node(
             package="joint_state_publisher",
             executable="joint_state_publisher",
-            condition=UnlessCondition(LaunchConfiguration("gui")),
+            condition=UnlessCondition(PythonExpression(
+                ["'true' if '", LaunchConfiguration("gui"),
+                 "'=='true' or '", LaunchConfiguration("sequence"), "'=='true' else 'false'"])),
         ),
         Node(
             package="joint_state_publisher_gui",
             executable="joint_state_publisher_gui",
-            condition=IfCondition(LaunchConfiguration("gui")),
+            condition=IfCondition(PythonExpression(
+                ["'true' if '", LaunchConfiguration("gui"),
+                 "'=='true' and '", LaunchConfiguration("sequence"), "'!='true' else 'false'"])),
         ),
         ExecuteProcess(
             cmd=["python3", os.path.join(pkg, "tools", "pipette_attach.py")],
             name="pipette_attach",
             output="screen",
+        ),
+        ExecuteProcess(
+            cmd=["python3", os.path.join(pkg, "tools", "workcell_sequence.py")],
+            name="workcell_sequence",
+            output="screen",
+            condition=IfCondition(LaunchConfiguration("sequence")),
         ),
         Node(
             name="rviz2",

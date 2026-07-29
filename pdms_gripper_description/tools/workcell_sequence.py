@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+"""Timed pick-and-place: go to the syringe, pick it up, carry it, put it down.
+
+This node OWNS /joint_states, so run it *instead of* joint_state_publisher_gui
+(the launch file does that for you with sequence:=true). Two publishers on
+/joint_states will fight and nothing will move.
+
+It solves IK itself (damped least squares over the six arm joints, using FK
+parsed straight out of the URDF), interpolates between the resulting joint
+waypoints with a smoothstep ease, and fires /pipette/attach at the exact
+moment the forks close.
+
+    ros2 launch pdms_gripper_description workcell.launch.py sequence:=true
+
+Parameters:
+    loop          (bool)  repeat forever                      default True
+    speed         (float) time multiplier, >1 = slower        default 1.0
+    grasp_height  (float) where on the barrel to grip, metres default 0.45
+    place_xyz     (float[3]) where to put it down             default below
+"""
+import math
+import os
+import xml.etree.ElementTree as ET
+
+import numpy as np
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool
+
+ARM_JOINTS = ["joint2_to_joint1", "joint3_to_joint2", "joint4_to_joint3",
+              "joint5_to_joint4", "joint6_to_joint5", "joint6output_to_joint6"]
+TOOL_LINK = "gripper_base"
+# grasp point in gripper_base coords: midpoint between the fork clamping faces
+TOOL_OFFSET = np.array([0.0015, 0.065, -0.015])
+
+GRIPPER_OPEN = 0.0
+GRIPPER_CLOSED = -0.55
+
+# --- the timeline. (label, duration_s, waypoint_key, gripper, attached) ------
+TIMELINE = [
+    ("home",            1.5, "home",      GRIPPER_OPEN,   False),
+    ("go to syringe",   2.5, "pregrasp",  GRIPPER_OPEN,   False),
+    ("approach",        1.5, "grasp",     GRIPPER_OPEN,   False),
+    ("close gripper",   1.0, "grasp",     GRIPPER_CLOSED, False),
+    ("pick up",         1.5, "lift",      GRIPPER_CLOSED, True),
+    ("carry",           2.5, "preplace",  GRIPPER_CLOSED, True),
+    ("put down",        1.5, "place",     GRIPPER_CLOSED, True),
+    ("open gripper",    1.0, "place",     GRIPPER_OPEN,   True),
+    ("retreat",         1.5, "preplace",  GRIPPER_OPEN,   False),
+    ("home",            2.0, "home",      GRIPPER_OPEN,   False),
+]
+
+
+def rpy_mat(r, p, y):
+    cr, sr, cp, sp, cy, sy = (math.cos(r), math.sin(r), math.cos(p),
+                              math.sin(p), math.cos(y), math.sin(y))
+    return np.array([
+        [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+        [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+        [-sp, cp * sr, cp * cr]])
+
+
+def axis_rot(axis, a):
+    ax = axis / (np.linalg.norm(axis) or 1.0)
+    K = np.array([[0, -ax[2], ax[1]], [ax[2], 0, -ax[0]], [-ax[1], ax[0], 0]])
+    return np.eye(3) + math.sin(a) * K + (1 - math.cos(a)) * (K @ K)
+
+
+class Chain:
+    """Serial-chain FK/IK read straight from the URDF."""
+
+    def __init__(self, urdf_path):
+        root = ET.parse(urdf_path).getroot()
+        self.joints = {}
+        order = []
+        for j in root.findall("joint"):
+            o = j.find("origin")
+            xyz = np.array([float(v) for v in (o.get("xyz", "0 0 0").split())]) if o is not None else np.zeros(3)
+            rpy = np.array([float(v) for v in (o.get("rpy", "0 0 0").split())]) if o is not None else np.zeros(3)
+            ax = j.find("axis")
+            axis = np.array([float(v) for v in ax.get("xyz").split()]) if ax is not None else np.array([0, 0, 1.0])
+            self.joints[j.get("name")] = dict(
+                xyz=xyz, rpy=rpy, axis=axis, type=j.get("type"),
+                parent=j.find("parent").get("link"), child=j.find("child").get("link"))
+            order.append(j.get("name"))
+        # fixed hop from the last arm joint's child to the tool link
+        self.tail = [n for n, d in self.joints.items()
+                     if d["type"] == "fixed" and d["child"] == TOOL_LINK]
+
+    def fk(self, q):
+        T = np.eye(4)
+        for name, a in zip(ARM_JOINTS, q):
+            d = self.joints[name]
+            L = np.eye(4)
+            L[:3, :3] = rpy_mat(*d["rpy"])
+            L[:3, 3] = d["xyz"]
+            R = np.eye(4)
+            R[:3, :3] = axis_rot(d["axis"], a)
+            T = T @ L @ R
+        for name in self.tail:
+            d = self.joints[name]
+            L = np.eye(4)
+            L[:3, :3] = rpy_mat(*d["rpy"])
+            L[:3, 3] = d["xyz"]
+            T = T @ L
+        return T
+
+    def tool(self, q):
+        T = self.fk(q)
+        return T[:3, 3] + T[:3, :3] @ TOOL_OFFSET, T[:3, :3]
+
+    def ik(self, p_target, R_target, q0, iters=120, lam=0.08, w_rot=0.45):
+        q = np.array(q0, float)
+        for _ in range(iters):
+            p, R = self.tool(q)
+            ep = p_target - p
+            Re = R_target @ R.T
+            ang = math.acos(max(-1.0, min(1.0, (np.trace(Re) - 1) / 2)))
+            if abs(ang) < 1e-9:
+                er = np.zeros(3)
+            else:
+                er = ang / (2 * math.sin(ang)) * np.array(
+                    [Re[2, 1] - Re[1, 2], Re[0, 2] - Re[2, 0], Re[1, 0] - Re[0, 1]])
+            e = np.concatenate([ep, w_rot * er])
+            if np.linalg.norm(ep) < 5e-4 and abs(ang) < 0.02:
+                break
+            J = np.zeros((6, 6))
+            d = 1e-6
+            for i in range(6):
+                qd = q.copy()
+                qd[i] += d
+                pd, Rd = self.tool(qd)
+                J[:3, i] = (pd - p) / d
+                Rr = Rd @ R.T
+                a2 = math.acos(max(-1.0, min(1.0, (np.trace(Rr) - 1) / 2)))
+                if abs(a2) < 1e-12:
+                    v = np.zeros(3)
+                else:
+                    v = a2 / (2 * math.sin(a2)) * np.array(
+                        [Rr[2, 1] - Rr[1, 2], Rr[0, 2] - Rr[2, 0], Rr[1, 0] - Rr[0, 1]])
+                J[3:, i] = w_rot * v / d
+            JT = J.T
+            q = q + JT @ np.linalg.solve(J @ JT + (lam ** 2) * np.eye(6), e)
+            q = np.clip(q, -3.0, 3.0)
+        p, R = self.tool(q)
+        return q, np.linalg.norm(p_target - p)
+
+
+def smoothstep(t):
+    return t * t * (3 - 2 * t)
+
+
+class Sequence(Node):
+    def __init__(self):
+        super().__init__("workcell_sequence")
+        share = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.declare_parameter("urdf", os.path.join(
+            share, "urdf", "mycobot_320_pi_2022_workcell.urdf"))
+        self.declare_parameter("loop", True)
+        self.declare_parameter("speed", 1.0)
+        self.declare_parameter("grasp_height", 0.360)
+        self.declare_parameter("place_xyz", [0.190, -0.190, 0.300])
+        self.declare_parameter("bore_xy", [0.0, -0.300])
+
+        urdf = self.get_parameter("urdf").value
+        self.chain = Chain(urdf)
+
+        self.pub = self.create_publisher(JointState, "/joint_states", 10)
+        self.attach_pub = self.create_publisher(Bool, "/pipette/attach", 1)
+
+        self.wp = self.solve_waypoints()
+        self.total = sum(d for _, d, _, _, _ in TIMELINE)
+        self.t0 = self.get_clock().now()
+        self.last_attached = None
+        self.last_label = None
+        self.create_timer(1.0 / 50.0, self.tick)
+        self.get_logger().info("sequence ready; %.1f s per cycle" % self.total)
+
+    # ---- pose targets -----------------------------------------------------
+    @staticmethod
+    def R_azimuth(phi):
+        """gripper_base orientation approaching a vertical shaft from azimuth phi.
+
+        +Y of gripper_base (the approach direction) points along
+        (cos phi, sin phi, 0); +X (the clamping direction) is horizontal and
+        perpendicular; +Z then always falls to -Z world.
+        """
+        c, s = math.cos(phi), math.sin(phi)
+        return np.array([[-s, c, 0.0],
+                         [c,  s, 0.0],
+                         [0.0, 0.0, -1.0]])
+
+    def solve_pose(self, p, q0):
+        """IK with the approach azimuth free - it is a genuine DOF here."""
+        best = (1e9, None)
+        seeds = [q0, np.array([0.0, -0.6, 1.2, -0.6, 0.0, 0.0])]
+        for phi in np.arange(-math.pi, math.pi, math.radians(30)):
+            R = self.R_azimuth(phi)
+            for s in seeds:
+                q, err = self.chain.ik(p, R, s)
+                if err < best[0]:
+                    best = (err, q.copy())
+                if best[0] < 1e-3:
+                    return best[1], best[0]
+        return best[1], best[0]
+
+    def solve_waypoints(self):
+        bore = self.get_parameter("bore_xy").value
+        gh = float(self.get_parameter("grasp_height").value)
+        place = list(self.get_parameter("place_xyz").value)
+
+        grasp = np.array([bore[0], bore[1], gh])
+        approach = np.array([bore[0], bore[1], 0.0])
+        approach = approach / (np.linalg.norm(approach) or 1.0)   # base -> bore
+        targets = {
+            "pregrasp": grasp - approach * 0.085,
+            "grasp":    grasp,
+            "lift":     grasp - approach * 0.02 + np.array([0, 0, 0.09]),
+            "preplace": np.array(place) + np.array([0, 0, 0.10]),
+            "place":    np.array(place),
+        }
+        out = {"home": np.array([0.0, -0.6, 1.2, -0.6, 0.0, 0.0])}
+        q = out["home"].copy()
+        for k in ["pregrasp", "grasp", "lift", "preplace", "place"]:
+            q, err = self.solve_pose(targets[k], q)
+            out[k] = q.copy()
+            msg = "  %-9s target %s  residual %.1f mm" % (
+                k, np.round(targets[k], 3).tolist(), err * 1000)
+            if err < 3e-3:
+                self.get_logger().info(msg)
+            else:
+                self.get_logger().warn(msg + "   <-- NOT REACHED")
+        return out
+
+    # ---- playback ---------------------------------------------------------
+    def tick(self):
+        speed = max(0.05, float(self.get_parameter("speed").value))
+        el = (self.get_clock().now() - self.t0).nanoseconds / 1e9 / speed
+        if el >= self.total:
+            if not self.get_parameter("loop").value:
+                el = self.total - 1e-3
+            else:
+                self.t0 = self.get_clock().now()
+                el = 0.0
+
+        acc = 0.0
+        prev_key = TIMELINE[0][2]
+        prev_grip = TIMELINE[0][3]
+        label, q, grip, attached = None, None, None, False
+        for lab, dur, key, g, att in TIMELINE:
+            if el <= acc + dur:
+                u = smoothstep(min(1.0, max(0.0, (el - acc) / dur)))
+                q = (1 - u) * self.wp[prev_key] + u * self.wp[key]
+                grip = (1 - u) * prev_grip + u * g
+                label, attached = lab, att
+                break
+            acc += dur
+            prev_key, prev_grip = key, g
+        if q is None:
+            q, grip, attached, label = self.wp["home"], GRIPPER_OPEN, False, "home"
+
+        if attached != self.last_attached:
+            self.attach_pub.publish(Bool(data=bool(attached)))
+            self.last_attached = attached
+        if label != self.last_label:
+            self.get_logger().info("[%5.1fs] %s" % (el, label))
+            self.last_label = label
+
+        m = JointState()
+        m.header.stamp = self.get_clock().now().to_msg()
+        m.name = ARM_JOINTS + ["gripper_controller"]
+        m.position = [float(v) for v in q] + [float(grip)]
+        self.pub.publish(m)
+
+
+def main():
+    rclpy.init()
+    n = Sequence()
+    try:
+        rclpy.spin(n)
+    except KeyboardInterrupt:
+        pass
+    n.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

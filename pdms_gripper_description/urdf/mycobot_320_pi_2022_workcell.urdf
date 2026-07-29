@@ -370,7 +370,7 @@
   <joint name="world_to_frame" type="fixed">
     <parent link="world"/>
     <child link="frame"/>
-    <origin xyz="0.23913 0.26972 0.00000" rpy="0.00000 0.00000 0.00000"/>
+    <origin xyz="0.26972 -0.34913 0.00000" rpy="0.00000 0.00000 -1.57080"/>
   </joint>
 
   <link name="pipette_holder">
@@ -388,7 +388,7 @@
   <joint name="frame_to_holder" type="fixed">
     <parent link="frame"/>
     <child link="pipette_holder"/>
-    <origin xyz="0.00587 -0.26972 0.25000" rpy="0.00000 0.00000 -1.57080"/>
+    <origin xyz="-0.01413 -0.26972 0.25000" rpy="0.00000 0.00000 1.57080"/>
   </joint>
 
   <link name="pipette_socket"/>

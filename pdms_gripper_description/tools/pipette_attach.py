@@ -20,6 +20,7 @@ Both offsets are ROS parameters, so you can tune the grasp live:
     ros2 param set /pipette_attach grasp_rpy "[-1.5708, 0.0, 0.0]"
 """
 import math
+import os
 
 import rclpy
 from rclpy.node import Node
@@ -30,17 +31,34 @@ from tf2_ros import TransformBroadcaster
 
 MESH = "package://pdms_gripper_description/meshes/assembled_pipette.dae"
 
-# Pose of the pipette mesh origin in its parent frame.
-# In the holder: shaft axis lands on the bore centre once mesh +Y is rotated to
-# -Z; the tip then ends 60 mm below the shelf.
-HELD_XYZ = [0.00147, -0.01495, 0.1041]
-HELD_RPY = [-math.pi / 2, 0.0, 0.0]
+# Pose of the pipette mesh origin in its parent frame. These are DEFAULTS only
+# -- the real values come from config/pipette_pose.yaml, which build_workcell.py
+# generates alongside the URDF so the Marker and the URDF cannot disagree.
+HELD_XYZ = [0.00147, 0.01495, 0.1579]
+HELD_RPY = [math.pi / 2, 0.0, 0.0]
+
+
+def _load_pose():
+    """Read the generated pose file; fall back to the defaults above."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "config", "pipette_pose.yaml")
+    xyz, rpy = list(HELD_XYZ), list(HELD_RPY)
+    try:
+        for line in open(path):
+            line = line.split("#")[0].strip()
+            if line.startswith("held_xyz:"):
+                xyz = [float(v) for v in line.split("[")[1].split("]")[0].split(",")]
+            elif line.startswith("held_rpy:"):
+                rpy = [float(v) for v in line.split("[")[1].split("]")[0].split(",")]
+    except (IOError, IndexError, ValueError):
+        pass
+    return xyz, rpy
 
 # In the gripper: between the fork clamping faces. Derived from the stock
 # blade clamping-face centroids in gripper_base coords (+-64 mm in x, y~65 mm,
 # z~-15 mm), so the midpoint is roughly (0, 0.065, -0.015).
 GRASP_XYZ = [0.00147, 0.065, -0.015]
-GRASP_RPY = [-math.pi / 2, 0.0, 0.0]
+GRASP_RPY = [math.pi / 2, 0.0, 0.0]
 
 
 def quat_from_rpy(r, p, y):
@@ -58,8 +76,9 @@ class PipetteAttach(Node):
         super().__init__("pipette_attach")
         self.declare_parameter("held_frame", "pipette_socket")
         self.declare_parameter("grasp_frame", "gripper_base")
-        self.declare_parameter("held_xyz", HELD_XYZ)
-        self.declare_parameter("held_rpy", HELD_RPY)
+        held_xyz, held_rpy = _load_pose()
+        self.declare_parameter("held_xyz", held_xyz)
+        self.declare_parameter("held_rpy", held_rpy)
         self.declare_parameter("grasp_xyz", GRASP_XYZ)
         self.declare_parameter("grasp_rpy", GRASP_RPY)
 
