@@ -15,7 +15,7 @@
     <collision>
       <geometry>
 	     <!--- 0.0 0 -0.04  1.5708 3.14159-->
-       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/base.dae"/>
+       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/base.dae" scale="0.001 0.001 0.001"/>
         </geometry>
         <origin xyz = "0.0 0 0 " rpy = " 0 0 3.14159"/>
     </collision>
@@ -31,7 +31,7 @@
     </visual>
     <collision>
      <geometry>
-       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link1.dae"/>
+       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link1.dae" scale="0.001 0.001 0.001"/>
       </geometry>
       <origin xyz = "0.0 0.0 -0.078 " rpy = " 0 0 1.5708"/>
     </collision>
@@ -48,7 +48,7 @@
     </visual>
     <collision>
       <geometry>
-       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link2.dae"/>
+       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link2.dae" scale="0.001 0.001 0.001"/>
       </geometry>
       <origin xyz = "0.0 0.0 -0.04 " rpy = " 0 1.5708 0"/>
     </collision>
@@ -66,7 +66,7 @@
     <collision>
       <geometry>
        <!--- 0.0 0 -0.04 -->
-       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link3.dae"/>
+       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link3.dae" scale="0.001 0.001 0.001"/>
       </geometry>
       <origin xyz = "0.0 0.0 0.039 " rpy = " 1.5708 1.5708 1.5708"/>
     </collision>
@@ -84,7 +84,7 @@
     <collision>
        <geometry>
        <!--- 0.0 0 -0.04 -->
-       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link4.dae"/>
+       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link4.dae" scale="0.001 0.001 0.001"/>
       </geometry>
       <origin xyz = "0.0 -0.0024 -0.05" rpy = " 1.5708 1.5708 0"/>
     </collision>
@@ -102,7 +102,7 @@
     <collision>
       <geometry>
        <!--- 0.0 0 -0.04 -->
-       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link5.dae"/>
+       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link5.dae" scale="0.001 0.001 0.001"/>
       </geometry>
     <origin xyz = "0.0 0.0 -0.05 " rpy = " 0  0 -1.5708"/>
     </collision>
@@ -120,7 +120,7 @@
     <collision>
       <geometry>
        <!--- 0.0 0 -0.04 -->
-       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link6.dae"/>
+       <mesh filename="package://mycobot_description/urdf/mycobot_320_pi_2022/link6.dae" scale="0.001 0.001 0.001"/>
       </geometry>
     <origin xyz = "0.0 0.0 -0.0115 " rpy = " 1.5708 1.5708 0"/>
     </collision>
@@ -135,7 +135,7 @@
     </visual>
     <collision>
       <geometry>
-       <mesh filename="package://mycobot_description/urdf/pro_adaptive_gripper/gripper_base.dae"/>
+       <mesh filename="package://mycobot_description/urdf/pro_adaptive_gripper/gripper_base.dae" scale="0.001 0.001 0.001"/>
       </geometry>
     <origin xyz = "-0.02 0.012 -0.018 " rpy = " 1.5708 0 1.5708"/>
     </collision>
@@ -150,7 +150,7 @@
     </visual>
     <collision>
       <geometry>
-       <mesh filename="package://pdms_gripper_description/meshes/gripper_left1_fork.dae"/>
+       <mesh filename="package://pdms_gripper_description/meshes/gripper_left1_fork.dae" scale="0.001 0.001 0.001"/>
       </geometry>
         <origin xyz = "-0.00128 -0.00799 -0.00032" rpy = "3.14159 0 1.57080"/>
     </collision>
@@ -165,7 +165,7 @@
     </visual>
     <collision>
       <geometry>
-       <mesh filename="package://mycobot_description/urdf/pro_adaptive_gripper/gripper_left2.dae"/>
+       <mesh filename="package://mycobot_description/urdf/pro_adaptive_gripper/gripper_left2.dae" scale="0.001 0.001 0.001"/>
       </geometry>
         <origin xyz = "0.026 0.022 -0.018 " rpy = " 1.5708 0 1.5708"/>
     </collision>
@@ -181,7 +181,7 @@
     </visual>
     <collision>
       <geometry>
-       <mesh filename="package://mycobot_description/urdf/pro_adaptive_gripper/gripper_left3.dae"/>
+       <mesh filename="package://mycobot_description/urdf/pro_adaptive_gripper/gripper_left3.dae" scale="0.001 0.001 0.001"/>
       </geometry>
     <origin xyz = "0.0 0.0 -0.018 " rpy = " 1.5708 0 1.5708"/>
     </collision>
@@ -196,7 +196,7 @@
     </visual>
     <collision>
       <geometry>
-       <mesh filename="package://pdms_gripper_description/meshes/gripper_right1_fork.dae"/>
+       <mesh filename="package://pdms_gripper_description/meshes/gripper_right1_fork.dae" scale="0.001 0.001 0.001"/>
       </geometry>
         <origin xyz = "0.00000 0.00000 0.00010" rpy = "3.14159 0 1.57080"/>
     </collision>
@@ -211,7 +211,7 @@
     </visual>
     <collision>
       <geometry>
-       <mesh filename="package://mycobot_description/urdf/pro_adaptive_gripper/gripper_right2.dae"/>
+       <mesh filename="package://mycobot_description/urdf/pro_adaptive_gripper/gripper_right2.dae" scale="0.001 0.001 0.001"/>
       </geometry>
         <origin xyz = "-0.062 0.0224 -0.018 " rpy = " 1.5708 0 1.5708"/>
     </collision>
@@ -227,7 +227,7 @@
     </visual>
     <collision>
       <geometry>
-       <mesh filename="package://mycobot_description/urdf/pro_adaptive_gripper/gripper_right3.dae"/>
+       <mesh filename="package://mycobot_description/urdf/pro_adaptive_gripper/gripper_right3.dae" scale="0.001 0.001 0.001"/>
       </geometry>
     <origin xyz = "-0.034 0.0 -0.018 " rpy = " 1.5708 0 1.5708"/>
     </collision>
@@ -362,7 +362,7 @@
     <material name="frame_mat"><color rgba="0.35 0.38 0.40 1"/></material>
     </visual>
     <collision>
-      <geometry><mesh filename="package://pdms_gripper_description/meshes/frame_2020.dae"/></geometry>
+      <geometry><mesh filename="package://pdms_gripper_description/meshes/frame_2020.dae" scale="0.001 0.001 0.001"/></geometry>
       <origin xyz="0.00000 0.00000 0.00000" rpy="0.00000 0.00000 0.00000"/>
     </collision>
   </link>
@@ -370,7 +370,7 @@
   <joint name="world_to_frame" type="fixed">
     <parent link="world"/>
     <child link="frame"/>
-    <origin xyz="0.26972 -0.34913 0.00000" rpy="0.00000 0.00000 -1.57080"/>
+    <origin xyz="0.26972 -0.45913 0.00000" rpy="0.00000 0.00000 -1.57080"/>
   </joint>
 
   <link name="pipette_holder">
@@ -380,7 +380,7 @@
     <material name="pipette_holder_mat"><color rgba="0.85 0.45 0.10 1"/></material>
     </visual>
     <collision>
-      <geometry><mesh filename="package://pdms_gripper_description/meshes/pipette_holder_2020.dae"/></geometry>
+      <geometry><mesh filename="package://pdms_gripper_description/meshes/pipette_holder_2020.dae" scale="0.001 0.001 0.001"/></geometry>
       <origin xyz="0.00000 0.00000 0.00000" rpy="0.00000 0.00000 0.00000"/>
     </collision>
   </link>
@@ -388,7 +388,7 @@
   <joint name="frame_to_holder" type="fixed">
     <parent link="frame"/>
     <child link="pipette_holder"/>
-    <origin xyz="-0.01413 -0.26972 0.25000" rpy="0.00000 0.00000 1.57080"/>
+    <origin xyz="-0.01413 -0.26972 0.18000" rpy="0.00000 0.00000 1.57080"/>
   </joint>
 
   <link name="pipette_socket"/>

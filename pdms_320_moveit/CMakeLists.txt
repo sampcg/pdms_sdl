@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.8)
+project(pdms_320_moveit)
+find_package(ament_cmake REQUIRED)
+install(DIRECTORY config launch tools DESTINATION share/${PROJECT_NAME})
+ament_package()

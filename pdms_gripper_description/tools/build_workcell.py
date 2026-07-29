@@ -38,7 +38,7 @@ M = 0.001  # mesh units are mm
 # flange normal (local +y) must then point -X, i.e. yaw = +pi/2.
 BAR_FACE_X = -14.13
 BAR_CENTRE_Y = -269.72   # midpoint of that bar along its length
-BAR_MID_Z = 250.0        # bar mid-height
+BAR_MID_Z = 180.0        # bar mid-height (frame revised 2026-07-29: was 250)
 HOLDER_YAW = math.pi / 2
 BORE_LOCAL = (0.0, 35.0)  # bore centre in holder x,y
 
@@ -55,7 +55,7 @@ BORE_IN_FRAME = (BAR_FACE_X + _b[0], BAR_CENTRE_Y + _b[1], BAR_MID_Z + _b[2])
 # where we want the bore to land relative to the robot base (metres).
 # 300 mm keeps it inside the 320's ~350 mm reach while pushing the frame
 # structure itself clear of the robot.
-BORE_IN_BASE = (0.0, -0.300, 0.250)
+BORE_IN_BASE = (0.0, -0.410, 0.180)   # 410 mm: furthest standoff still reachable
 
 # The arm's natural front is -Y (at q=0 the tool sits at y=-0.275), so yaw the
 # frame -90 deg: the crossbar then runs along X and the holder's mounting face
@@ -145,6 +145,21 @@ def main():
                            (0, 0, 0), (0, 0, 0)))
 
     urdf = urdf.replace("</robot>", "".join(parts) + "\n</robot>")
+    # MoveIt's collision loader (geometric_shapes) ignores the COLLADA
+    # <unit meter="0.001"> tag that RViz honours, so collision meshes load
+    # 1000x oversized. Make the scale explicit on every collision mesh.
+    def scale_collisions(x):
+        out, pos = [], 0
+        for m in re.finditer(r"<collision>.*?</collision>", x, re.S):
+            blk = m.group(0)
+            if "scale=" not in blk:
+                blk = re.sub(r'(<mesh filename="[^"]+")', r'\1 scale="0.001 0.001 0.001"', blk)
+            out.append(x[pos:m.start()]); out.append(blk); pos = m.end()
+        out.append(x[pos:])
+        return "".join(out)
+
+    urdf = scale_collisions(urdf)
+
     open(OUT, "w").write(urdf)
 
     # Single source of truth for the pipette pose. pipette_attach.py reads this

@@ -159,9 +159,9 @@ class Sequence(Node):
             share, "urdf", "mycobot_320_pi_2022_workcell.urdf"))
         self.declare_parameter("loop", True)
         self.declare_parameter("speed", 1.0)
-        self.declare_parameter("grasp_height", 0.360)
-        self.declare_parameter("place_xyz", [0.190, -0.190, 0.300])
-        self.declare_parameter("bore_xy", [0.0, -0.300])
+        self.declare_parameter("grasp_height", 0.260)   # holder plate top is now 0.225
+        self.declare_parameter("place_xyz", [0.190, -0.190, 0.230])
+        self.declare_parameter("bore_xy", [0.0, -0.410])
 
         urdf = self.get_parameter("urdf").value
         self.chain = Chain(urdf)
