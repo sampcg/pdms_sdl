@@ -151,6 +151,17 @@ def smoothstep(t):
     return t * t * (3 - 2 * t)
 
 
+def catmull_rom(p0, p1, p2, p3, u):
+    """C1-continuous spline through p1->p2. Using this instead of a per-segment
+    smoothstep is what removes the stop-start: velocity no longer drops to zero
+    at every waypoint, it carries through from the previous segment."""
+    u2, u3 = u * u, u * u * u
+    return 0.5 * ((2 * p1) +
+                  (-p0 + p2) * u +
+                  (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 +
+                  (-p0 + 3 * p1 - 3 * p2 + p3) * u3)
+
+
 class Sequence(Node):
     def __init__(self):
         super().__init__("workcell_sequence")
@@ -162,6 +173,8 @@ class Sequence(Node):
         self.declare_parameter("grasp_height", 0.260)   # holder plate top is now 0.225
         self.declare_parameter("place_xyz", [0.190, -0.190, 0.230])
         self.declare_parameter("bore_xy", [0.0, -0.410])
+        # how far off head-on the grasp azimuth may stray, degrees
+        self.declare_parameter("azimuth_tolerance_deg", 25.0)
 
         urdf = self.get_parameter("urdf").value
         self.chain = Chain(urdf)
@@ -191,19 +204,52 @@ class Sequence(Node):
                          [c,  s, 0.0],
                          [0.0, 0.0, -1.0]])
 
+    def preferred_phi(self):
+        """Azimuth for a head-on grasp: the gripper approaches along the
+        base->bore direction, so the forks close on the pipette front-on rather
+        than from an arbitrary side."""
+        bore = list(self.get_parameter("bore_xy").value)
+        return math.atan2(bore[1], bore[0])
+
     def solve_pose(self, p, q0):
-        """IK with the approach azimuth free - it is a genuine DOF here."""
-        best = (1e9, None)
+        """IK, preferring a head-on approach.
+
+        The azimuth about a vertical shaft is geometrically free, but not all
+        choices look right - a side or rear approach is valid IK and a bad
+        grasp. So search a narrow window around the head-on direction first and
+        only widen if nothing there is reachable.
+        """
         seeds = [q0, np.array([0.0, -0.6, 1.2, -0.6, 0.0, 0.0])]
-        for phi in np.arange(-math.pi, math.pi, math.radians(30)):
-            R = self.R_azimuth(phi)
-            for s in seeds:
-                q, err = self.chain.ik(p, R, s)
-                if err < best[0]:
-                    best = (err, q.copy())
-                if best[0] < 1e-3:
-                    return best[1], best[0]
-        return best[1], best[0]
+        phi0 = self.preferred_phi()
+        tol = math.radians(float(self.get_parameter("azimuth_tolerance_deg").value))
+
+        # pass 1: head-on, then progressively off-axis but still frontal
+        window = [0.0]
+        d = math.radians(5)
+        while d <= tol:
+            window += [d, -d]
+            d += math.radians(5)
+        # Take the FIRST offset that is accurate enough, walking outwards from
+        # head-on. Taking the lowest-residual one instead would pick essentially
+        # at random, since every azimuth here solves to about the same 1 mm.
+        ok = 3e-3
+        for stage, offsets in enumerate((window,
+                                         sorted(np.arange(-math.pi, math.pi, math.radians(15)),
+                                                key=abs))):
+            fallback = (1e9, None)
+            for off in offsets:
+                R = self.R_azimuth(phi0 + off)
+                for s in seeds:
+                    q, err = self.chain.ik(p, R, s)
+                    if err < ok:
+                        if stage == 1 and abs(off) > tol:
+                            self.get_logger().warn(
+                                "   head-on not reachable; using %+.0f deg off"
+                                % math.degrees(off))
+                        return q.copy(), err
+                    if err < fallback[0]:
+                        fallback = (err, q.copy())
+        return fallback[1], fallback[0]
 
     def solve_waypoints(self):
         bore = self.get_parameter("bore_xy").value
@@ -224,22 +270,70 @@ class Sequence(Node):
             "preplace": np.array(place) + np.array([0, 0, 0.10]),
             "place":    np.array(place),
         }
-        # No "home" waypoint: the cycle starts and ends at pregrasp, so the
+        # No "home" waypoint at the start: the cycle begins at pregrasp, so the
         # arm never reverses away from the pipette before approaching it.
         out = {}
         q = np.array([0.0, -0.6, 1.2, -0.6, 0.0, 0.0])   # IK seed only
         for k in ["home", "pregrasp", "grasp", "lift", "preplace", "place"]:
             q, err = self.solve_pose(targets[k], q)
             out[k] = q.copy()
-            msg = "  %-9s target %s  residual %.1f mm" % (
-                k, np.round(targets[k], 3).tolist(), err * 1000)
+            off = math.degrees(self._phi_of(q) - self.preferred_phi())
+            off = (off + 180) % 360 - 180
+            msg = "  %-9s target %s  residual %.1f mm  azimuth %+.0f deg off head-on" % (
+                k, np.round(targets[k], 3).tolist(), err * 1000, off)
             if err < 3e-3:
                 self.get_logger().info(msg)
             else:
                 self.get_logger().warn(msg + "   <-- NOT REACHED")
+
+        # Straight-line Cartesian sub-waypoints where the shape of the path
+        # actually matters: sliding into the pipette and lifting it clear.
+        # Joint-space interpolation between two poses bows outward; sampling the
+        # straight line and solving IK at each sample keeps the tool on it.
+        self.sub = {}
+        for name, a, b, n in (("approach", "pregrasp", "grasp", 6),
+                              ("pick up",  "grasp", "lift", 6)):
+            pa, pb = targets[a], targets[b]
+            qs, qi = [], out[a].copy()
+            for i in range(1, n):
+                p = pa + (pb - pa) * (i / float(n))
+                qi, e = self.chain.ik(p, self.R_azimuth(self._phi_of(out[a])), qi)
+                qs.append(qi.copy())
+            self.sub[name] = qs
+            self.get_logger().info("  %-9s %d cartesian sub-points" % (name, len(qs)))
         return out
 
+    def _phi_of(self, q):
+        """Approach azimuth actually used by a solved configuration."""
+        _, R = self.chain.tool(q)
+        return math.atan2(R[1, 1], R[0, 1])
+
     # ---- playback ---------------------------------------------------------
+    def segment(self, idx, prev_key, key, u):
+        """Position along one timeline segment.
+
+        Segments with Cartesian sub-points (approach, pick up) walk the
+        straight-line samples. Everything else uses a Catmull-Rom spline whose
+        control points come from the neighbouring waypoints, so velocity is
+        continuous across waypoint boundaries instead of dropping to zero.
+        """
+        lab = TIMELINE[idx][0]
+        sub = self.sub.get(lab)
+        if sub:
+            pts = [self.wp[prev_key]] + sub + [self.wp[key]]
+            s = u * (len(pts) - 1)
+            i = min(int(s), len(pts) - 2)
+            return (1 - (s - i)) * pts[i] + (s - i) * pts[i + 1]
+
+        if prev_key == key:                      # gripper-only step, arm holds
+            return self.wp[key]
+
+        keys = [seg[2] for seg in TIMELINE]
+        p1, p2 = self.wp[prev_key], self.wp[key]
+        p0 = self.wp[keys[idx - 1]] if idx - 1 >= 0 else p1
+        p3 = self.wp[keys[idx + 1]] if idx + 1 < len(keys) else p2
+        return catmull_rom(p0, p1, p2, p3, u)
+
     def tick(self):
         speed = max(0.05, float(self.get_parameter("speed").value))
         el = (self.get_clock().now() - self.t0).nanoseconds / 1e9 / speed
@@ -254,11 +348,11 @@ class Sequence(Node):
         prev_key = TIMELINE[0][2]
         prev_grip = TIMELINE[0][3]
         label, q, grip, attached = None, None, None, False
-        for lab, dur, key, g, att in TIMELINE:
+        for idx, (lab, dur, key, g, att) in enumerate(TIMELINE):
             if el <= acc + dur:
-                u = smoothstep(min(1.0, max(0.0, (el - acc) / dur)))
-                q = (1 - u) * self.wp[prev_key] + u * self.wp[key]
-                grip = (1 - u) * prev_grip + u * g
+                u = min(1.0, max(0.0, (el - acc) / dur))
+                q = self.segment(idx, prev_key, key, u)
+                grip = (1 - smoothstep(u)) * prev_grip + smoothstep(u) * g
                 label, attached = lab, att
                 break
             acc += dur

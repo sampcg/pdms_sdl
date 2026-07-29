@@ -81,6 +81,7 @@ class PipetteAttach(Node):
         self.declare_parameter("held_rpy", held_rpy)
         self.declare_parameter("grasp_xyz", GRASP_XYZ)
         self.declare_parameter("grasp_rpy", GRASP_RPY)
+        self.declare_parameter("max_grasp_distance", 0.15)
 
         self.attached = False
         # Captured at the instant of the grasp: the pipette's pose relative to
@@ -116,8 +117,20 @@ class PipetteAttach(Node):
             return None
         tr = t.transform.translation
         q = t.transform.rotation
-        self.get_logger().info("  captured grasp offset xyz=(%.4f, %.4f, %.4f)"
-                               % (tr.x, tr.y, tr.z))
+        d = math.sqrt(tr.x ** 2 + tr.y ** 2 + tr.z ** 2)
+        # Sanity check: the capture is only meaningful if the gripper has
+        # actually reached the pipette. If /pipette/attach fires early (e.g. the
+        # timeline was reordered or `approach` was lengthened), we would freeze a
+        # far-away offset and the pipette would fly along beside the gripper.
+        limit = float(self.get_parameter("max_grasp_distance").value)
+        if d > limit:
+            self.get_logger().error(
+                "grasp captured %.0f mm from gripper_base (limit %.0f mm) - the "
+                "gripper is probably not at the pipette yet; check when "
+                "/pipette/attach fires in the timeline" % (d * 1000, limit * 1000))
+        else:
+            self.get_logger().info("  captured grasp offset xyz=(%.4f, %.4f, %.4f)  |d|=%.0f mm"
+                                   % (tr.x, tr.y, tr.z, d * 1000))
         return ([tr.x, tr.y, tr.z], [q.x, q.y, q.z, q.w])
 
     def _p(self, n):
