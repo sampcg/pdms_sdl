@@ -43,10 +43,11 @@ TIMELINE = [
     ("approach",        1.5, "grasp",     GRIPPER_OPEN,   False),
     ("close gripper",   1.0, "grasp",     GRIPPER_CLOSED, False),
     ("pick up",         1.5, "lift",      GRIPPER_CLOSED, True),
-    ("carry",           2.5, "preplace",  GRIPPER_CLOSED, True),
-    ("put down",        1.5, "place",     GRIPPER_CLOSED, True),
-    ("open gripper",    1.0, "place",     GRIPPER_OPEN,   True),
-    ("retreat",         1.5, "preplace",  GRIPPER_OPEN,   False),
+    ("carry away",      2.0, "via",       GRIPPER_CLOSED, True),
+    ("bring back",      2.0, "lift",      GRIPPER_CLOSED, True),
+    ("insert",          1.5, "grasp",     GRIPPER_CLOSED, True),
+    ("release",         1.0, "grasp",     GRIPPER_OPEN,   False),
+    ("retreat",         1.5, "pregrasp",  GRIPPER_OPEN,   False),
     ("home",            2.0, "home",      GRIPPER_OPEN,   False),
     ("return",          1.5, "pregrasp",  GRIPPER_OPEN,   False),
 ]
@@ -267,14 +268,17 @@ class Sequence(Node):
             "pregrasp": grasp - approach * 0.085,
             "grasp":    grasp,
             "lift":     grasp - approach * 0.02 + np.array([0, 0, 0.09]),
-            "preplace": np.array(place) + np.array([0, 0, 0.10]),
-            "place":    np.array(place),
+            # Where the pipette is carried to before being brought back.
+            # It is NOT set down here - the pipette is returned to the holder
+            # bore and only released once seated, so the release never leaves
+            # it hanging in mid-air.
+            "via":      np.array(place) + np.array([0, 0, 0.10]),
         }
         # No "home" waypoint at the start: the cycle begins at pregrasp, so the
         # arm never reverses away from the pipette before approaching it.
         out = {}
         q = np.array([0.0, -0.6, 1.2, -0.6, 0.0, 0.0])   # IK seed only
-        for k in ["home", "pregrasp", "grasp", "lift", "preplace", "place"]:
+        for k in ["home", "pregrasp", "grasp", "lift", "via"]:
             q, err = self.solve_pose(targets[k], q)
             out[k] = q.copy()
             off = math.degrees(self._phi_of(q) - self.preferred_phi())
@@ -292,7 +296,8 @@ class Sequence(Node):
         # straight line and solving IK at each sample keeps the tool on it.
         self.sub = {}
         for name, a, b, n in (("approach", "pregrasp", "grasp", 6),
-                              ("pick up",  "grasp", "lift", 6)):
+                              ("pick up",  "grasp", "lift", 6),
+                              ("insert",   "lift", "grasp", 6)):
             pa, pb = targets[a], targets[b]
             qs, qi = [], out[a].copy()
             for i in range(1, n):
