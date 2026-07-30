@@ -33,14 +33,17 @@ MESH = "package://pdms_gripper_description/meshes/assembled_pipette.dae"
 MESH_DIR = "package://pdms_gripper_description/meshes/"
 
 
-def _load_objects():
-    """Read config/objects*.yaml if present: one entry per movable object.
+def _load_objects(name):
+    """Read a named object manifest: one entry per movable object.
 
-    Without it the node behaves exactly as before - a single pipette in a single
-    socket - so the plain workcell is unaffected.
+    Only used when the caller asks for it by name. Loading it unconditionally was
+    a bug: the rail manifest names sockets that do not exist in the single-station
+    URDF, so the markers were parented to missing frames and nothing appeared.
     """
+    if not name or name in ("none", "None", ""):
+        return None
     d = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
-    for name in ("objects_rail.yaml",):
+    for name in (name,):
         p = os.path.join(d, name)
         if not os.path.exists(p):
             continue
@@ -115,7 +118,8 @@ class PipetteAttach(Node):
         self.declare_parameter("grasp_rpy", GRASP_RPY)
         self.declare_parameter("max_grasp_distance", 0.15)
 
-        objs = _load_objects()
+        self.declare_parameter("objects", "")
+        objs = _load_objects(self.get_parameter("objects").value)
         if objs:
             self.objs = objs
         else:

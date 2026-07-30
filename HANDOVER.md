@@ -11,8 +11,11 @@ checking — it interpolates a spline and publishes joint states directly.
 
 **Rail scene, 3 stations (2 syringes + mixer), manual sliders:**
 ```bash
-source /home/samuel/colcon_ws/install/setup.bash && ros2 launch pdms_gripper_description workcell.launch.py model:=$(ros2 pkg prefix --share pdms_gripper_description)/urdf/mycobot_320_pi_2022_workcell_rail.urdf
+source /home/samuel/colcon_ws/install/setup.bash && ros2 launch pdms_gripper_description workcell.launch.py model:=$(ros2 pkg prefix --share pdms_gripper_description)/urdf/mycobot_320_pi_2022_workcell_rail.urdf objects:=objects_rail.yaml
 ```
+`objects:=objects_rail.yaml` is required. Without it you get the holders but no
+syringes and no mixer: the manifest is opt-in, because loading it against the
+single-station URDF parents the markers to sockets that do not exist.
 Grasp an object: `ros2 topic pub --once /pipette/grasp std_msgs/Int32 "{data: 0}"`
 (0 = left syringe, 1 = right syringe, 2 = mixer, -1 = release)
 
