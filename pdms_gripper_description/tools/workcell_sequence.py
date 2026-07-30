@@ -31,25 +31,37 @@ from std_msgs.msg import Bool
 ARM_JOINTS = ["joint2_to_joint1", "joint3_to_joint2", "joint4_to_joint3",
               "joint5_to_joint4", "joint6_to_joint5", "joint6output_to_joint6"]
 TOOL_LINK = "gripper_base"
-# grasp point in gripper_base coords: midpoint between the fork clamping faces
-TOOL_OFFSET = np.array([0.0015, 0.065, -0.015])
+# Grasp point in gripper_base coords: midpoint between the FORK clamping faces,
+# measured from the fork meshes at the closed gripper value:
+#   left  face centroid  x=-22.1  y=104.8  z=-15.3   (946 mm2)
+#   right face centroid  x=+21.5  y=104.1  z=-14.8   (1072 mm2)
+# The old value (y=0.065) came from the STOCK blades, before the forks were
+# fitted. It was 39 mm too shallow, so IK drove the gripper past the pipette and
+# held the barrel in the throat instead of between the fork faces.
+TOOL_OFFSET = np.array([0.0, 0.1044, -0.015])
 
-GRIPPER_OPEN = 0.0
-GRIPPER_CLOSED = -0.55
+# Fork gap vs gripper_controller, measured from the meshes at the grasp pose:
+#   -0.05  gap 109 mm   outer envelope 199 mm
+#   -0.65  gap  50 mm   outer envelope 140 mm   <- clears a 35 mm barrel
+#   -0.78  gap  35 mm   outer envelope 127 mm   <- first contact on the barrel
+# -0.55 (the old "closed") leaves a 61 mm gap and never touches the barrel.
+GRIPPER_OPEN = -0.05        # wide; only needed at home
+GRIPPER_TRANSIT = -0.65     # narrow but still clears the barrel
+GRIPPER_CLOSED = -0.78      # actually grips a 35 mm barrel
 
 # --- the timeline. (label, duration_s, waypoint_key, gripper, attached) ------
 TIMELINE = [
-    ("start",           1.0, "pregrasp",  GRIPPER_OPEN,   False),
-    ("approach",        1.5, "grasp",     GRIPPER_OPEN,   False),
-    ("close gripper",   1.0, "grasp",     GRIPPER_CLOSED, False),
-    ("pick up",         1.5, "lift",      GRIPPER_CLOSED, True),
-    ("carry away",      2.0, "via",       GRIPPER_CLOSED, True),
-    ("bring back",      2.0, "lift",      GRIPPER_CLOSED, True),
-    ("insert",          1.5, "grasp",     GRIPPER_CLOSED, True),
-    ("release",         1.0, "grasp",     GRIPPER_OPEN,   False),
-    ("retreat",         1.5, "pregrasp",  GRIPPER_OPEN,   False),
-    ("home",            2.0, "home",      GRIPPER_OPEN,   False),
-    ("return",          1.5, "pregrasp",  GRIPPER_OPEN,   False),
+    ("start",           1.0, "pregrasp",  GRIPPER_TRANSIT, False),
+    ("approach",        1.5, "grasp",     GRIPPER_TRANSIT, False),
+    ("close gripper",   1.0, "grasp",     GRIPPER_CLOSED,  False),
+    ("pick up",         1.5, "lift",      GRIPPER_CLOSED,  True),
+    ("carry away",      2.0, "via",       GRIPPER_CLOSED,  True),
+    ("bring back",      2.0, "lift",      GRIPPER_CLOSED,  True),
+    ("insert",          1.5, "grasp",     GRIPPER_CLOSED,  True),
+    ("release",         1.0, "grasp",     GRIPPER_TRANSIT, False),
+    ("retreat",         1.5, "pregrasp",  GRIPPER_TRANSIT, False),
+    ("home",            2.0, "home",      GRIPPER_OPEN,    False),
+    ("return",          1.5, "pregrasp",  GRIPPER_TRANSIT, False),
 ]
 
 
@@ -363,7 +375,7 @@ class Sequence(Node):
             acc += dur
             prev_key, prev_grip = key, g
         if q is None:
-            q, grip, attached, label = self.wp["pregrasp"], GRIPPER_OPEN, False, "start"
+            q, grip, attached, label = self.wp["pregrasp"], GRIPPER_TRANSIT, False, "start"
 
         if attached != self.last_attached:
             self.attach_pub.publish(Bool(data=bool(attached)))
