@@ -29,17 +29,31 @@ OUT = os.path.join(PKG, "config", "firefighter.srdf")
 
 DESC = "/home/samuel/colcon_ws/install/pdms_gripper_description/share/pdms_gripper_description"
 MYCOBOT = "/home/samuel/colcon_ws/src/mycobot_ros2/mycobot_description"
-URDF = os.path.join(DESC, "urdf", "mycobot_320_pi_2022_workcell.urdf")
+URDF = os.path.join(DESC, "urdf", "mycobot_320_pi_2022_workcell_rail.urdf")
 
 ARM = ["joint2_to_joint1", "joint3_to_joint2", "joint4_to_joint3",
        "joint5_to_joint4", "joint6_to_joint5", "joint6output_to_joint6"]
 
 # The adaptive gripper is a closed four-bar, but URDF can only express an open
-# chain, so its links interpenetrate by design as the fingers travel. Every
-# pair inside the gripper must be disabled or planning fails the moment the
-# gripper opens (gripper_left3 vs gripper_left2 was the observed failure).
+# chain, so SAME-SIDE links interpenetrate by design as the fingers travel and
+# must be disabled or planning fails the moment the gripper opens.
+#
+# CROSS-SIDE pairs (left <-> right) are NOT disabled: those are the fingers
+# closing onto each other, which is a real self-collision worth catching. A
+# mesh-distance scan over the full joint limits measured gripper_left1 vs
+# gripper_right1 down to 0.6 mm - close, but never interpenetrating - so the
+# pair can be checked without making the robot permanently self-colliding.
+# Anything that genuinely overlaps in every sample still falls out as "Default"
+# via the sampling below (gripper_left3 vs gripper_right3 does exactly that).
 GRIPPER_LINKS = ["gripper_base", "gripper_left1", "gripper_left2", "gripper_left3",
                  "gripper_right1", "gripper_right2", "gripper_right3"]
+
+
+def same_side(a, b):
+    """True if both links are on one side of the gripper (or one is the base)."""
+    if a == "gripper_base" or b == "gripper_base":
+        return True
+    return ("left" in a) == ("left" in b)
 N_SAMPLES = 1200
 
 
@@ -92,7 +106,7 @@ def classify(R):
     for p in sorted(pairs, key=lambda s: sorted(tuple(s))):
         a, b = sorted(tuple(p))
         c = hits[p]
-        if a in GRIPPER_LINKS and b in GRIPPER_LINKS:
+        if a in GRIPPER_LINKS and b in GRIPPER_LINKS and same_side(a, b):
             rows.append((a, b, "Default"))   # four-bar closure, see note above
         elif p in adj:
             rows.append((a, b, "Adjacent"))

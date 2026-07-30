@@ -2,7 +2,7 @@
 <!-- Wraps the workcell URDF and adds a mock ros2_control system so
      MoveIt has something to execute trajectories against. -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="firefighter">
-  <xacro:include filename="$(find pdms_gripper_description)/urdf/mycobot_320_pi_2022_workcell.urdf"/>
+  <xacro:include filename="$(find pdms_gripper_description)/urdf/mycobot_320_pi_2022_workcell_rail.urdf"/>
 
   <ros2_control name="MockSystem" type="system">
     <hardware>
@@ -46,35 +46,30 @@
     <joint name="gripper_base_to_gripper_left2">
       <param name="mimic">gripper_controller</param>
       <param name="multiplier">1.0</param>
-      <command_interface name="position"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
     <joint name="gripper_left3_to_gripper_left1">
       <param name="mimic">gripper_controller</param>
       <param name="multiplier">-1.0</param>
-      <command_interface name="position"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
     <joint name="gripper_base_to_gripper_right3">
       <param name="mimic">gripper_controller</param>
       <param name="multiplier">-1.0</param>
-      <command_interface name="position"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
     <joint name="gripper_base_to_gripper_right2">
       <param name="mimic">gripper_controller</param>
       <param name="multiplier">-1.0</param>
-      <command_interface name="position"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
     <joint name="gripper_right3_to_gripper_right1">
       <param name="mimic">gripper_controller</param>
       <param name="multiplier">1.0</param>
-      <command_interface name="position"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>

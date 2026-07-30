@@ -38,13 +38,21 @@
         <joint name="gripper_controller" value="-0.55"/>
     </group_state>
 
-    <!-- 54 pairs disabled; 66 pairs left enabled for real collision checking (arm vs frame/holder included) -->
-    <disable_collisions link1="base" link2="frame" reason="Default"/>
+    <!-- 93 pairs disabled; 78 pairs left enabled for real collision checking (arm vs frame/holder included) -->
+    <disable_collisions link1="base" link2="frame" reason="Never"/>
     <disable_collisions link1="base" link2="link1" reason="Adjacent"/>
     <disable_collisions link1="base" link2="link2" reason="Never"/>
-    <disable_collisions link1="base" link2="pipette_holder" reason="Never"/>
+    <disable_collisions link1="base" link2="mixer_holder" reason="Never"/>
+    <disable_collisions link1="base" link2="pipette_holder_0" reason="Never"/>
+    <disable_collisions link1="base" link2="pipette_holder_1" reason="Never"/>
+    <disable_collisions link1="base" link2="station_rail" reason="Never"/>
     <disable_collisions link1="frame" link2="link1" reason="Never"/>
-    <disable_collisions link1="frame" link2="pipette_holder" reason="Adjacent"/>
+    <disable_collisions link1="frame" link2="link2" reason="Never"/>
+    <disable_collisions link1="frame" link2="link3" reason="Never"/>
+    <disable_collisions link1="frame" link2="mixer_holder" reason="Default"/>
+    <disable_collisions link1="frame" link2="pipette_holder_0" reason="Default"/>
+    <disable_collisions link1="frame" link2="pipette_holder_1" reason="Default"/>
+    <disable_collisions link1="frame" link2="station_rail" reason="Adjacent"/>
     <disable_collisions link1="gripper_base" link2="gripper_left1" reason="Default"/>
     <disable_collisions link1="gripper_base" link2="gripper_left2" reason="Default"/>
     <disable_collisions link1="gripper_base" link2="gripper_left3" reason="Default"/>
@@ -52,27 +60,27 @@
     <disable_collisions link1="gripper_base" link2="gripper_right2" reason="Default"/>
     <disable_collisions link1="gripper_base" link2="gripper_right3" reason="Default"/>
     <disable_collisions link1="gripper_base" link2="link6" reason="Adjacent"/>
+    <disable_collisions link1="gripper_base" link2="mixer_holder" reason="Never"/>
+    <disable_collisions link1="gripper_base" link2="pipette_holder_1" reason="Never"/>
+    <disable_collisions link1="gripper_base" link2="station_rail" reason="Never"/>
     <disable_collisions link1="gripper_left1" link2="gripper_left2" reason="Default"/>
     <disable_collisions link1="gripper_left1" link2="gripper_left3" reason="Default"/>
-    <disable_collisions link1="gripper_left1" link2="gripper_right1" reason="Default"/>
-    <disable_collisions link1="gripper_left1" link2="gripper_right2" reason="Default"/>
-    <disable_collisions link1="gripper_left1" link2="gripper_right3" reason="Default"/>
+    <disable_collisions link1="gripper_left1" link2="gripper_right2" reason="Never"/>
     <disable_collisions link1="gripper_left1" link2="link4" reason="Never"/>
     <disable_collisions link1="gripper_left1" link2="link5" reason="Never"/>
     <disable_collisions link1="gripper_left1" link2="link6" reason="Never"/>
     <disable_collisions link1="gripper_left2" link2="gripper_left3" reason="Default"/>
-    <disable_collisions link1="gripper_left2" link2="gripper_right1" reason="Default"/>
-    <disable_collisions link1="gripper_left2" link2="gripper_right2" reason="Default"/>
-    <disable_collisions link1="gripper_left2" link2="gripper_right3" reason="Default"/>
+    <disable_collisions link1="gripper_left2" link2="gripper_right1" reason="Never"/>
+    <disable_collisions link1="gripper_left2" link2="gripper_right2" reason="Never"/>
     <disable_collisions link1="gripper_left2" link2="link4" reason="Never"/>
     <disable_collisions link1="gripper_left2" link2="link5" reason="Never"/>
     <disable_collisions link1="gripper_left2" link2="link6" reason="Never"/>
-    <disable_collisions link1="gripper_left3" link2="gripper_right1" reason="Default"/>
-    <disable_collisions link1="gripper_left3" link2="gripper_right2" reason="Default"/>
+    <disable_collisions link1="gripper_left2" link2="mixer_holder" reason="Never"/>
+    <disable_collisions link1="gripper_left2" link2="pipette_holder_0" reason="Never"/>
     <disable_collisions link1="gripper_left3" link2="gripper_right3" reason="Default"/>
     <disable_collisions link1="gripper_left3" link2="link4" reason="Never"/>
     <disable_collisions link1="gripper_left3" link2="link5" reason="Never"/>
-    <disable_collisions link1="gripper_left3" link2="link6" reason="Never"/>
+    <disable_collisions link1="gripper_left3" link2="mixer_holder" reason="Never"/>
     <disable_collisions link1="gripper_right1" link2="gripper_right2" reason="Default"/>
     <disable_collisions link1="gripper_right1" link2="gripper_right3" reason="Default"/>
     <disable_collisions link1="gripper_right1" link2="link4" reason="Never"/>
@@ -82,15 +90,46 @@
     <disable_collisions link1="gripper_right2" link2="link4" reason="Never"/>
     <disable_collisions link1="gripper_right2" link2="link5" reason="Never"/>
     <disable_collisions link1="gripper_right2" link2="link6" reason="Never"/>
+    <disable_collisions link1="gripper_right2" link2="pipette_holder_0" reason="Never"/>
+    <disable_collisions link1="gripper_right2" link2="pipette_holder_1" reason="Never"/>
+    <disable_collisions link1="gripper_right2" link2="station_rail" reason="Never"/>
     <disable_collisions link1="gripper_right3" link2="link4" reason="Never"/>
     <disable_collisions link1="gripper_right3" link2="link5" reason="Never"/>
-    <disable_collisions link1="gripper_right3" link2="link6" reason="Never"/>
+    <disable_collisions link1="gripper_right3" link2="mixer_holder" reason="Never"/>
+    <disable_collisions link1="gripper_right3" link2="pipette_holder_0" reason="Never"/>
     <disable_collisions link1="link1" link2="link2" reason="Adjacent"/>
-    <disable_collisions link1="link1" link2="pipette_holder" reason="Never"/>
+    <disable_collisions link1="link1" link2="mixer_holder" reason="Never"/>
+    <disable_collisions link1="link1" link2="pipette_holder_0" reason="Never"/>
+    <disable_collisions link1="link1" link2="pipette_holder_1" reason="Never"/>
+    <disable_collisions link1="link1" link2="station_rail" reason="Never"/>
     <disable_collisions link1="link2" link2="link3" reason="Adjacent"/>
-    <disable_collisions link1="link2" link2="pipette_holder" reason="Never"/>
+    <disable_collisions link1="link2" link2="mixer_holder" reason="Never"/>
+    <disable_collisions link1="link2" link2="pipette_holder_0" reason="Never"/>
+    <disable_collisions link1="link2" link2="pipette_holder_1" reason="Never"/>
+    <disable_collisions link1="link2" link2="station_rail" reason="Never"/>
     <disable_collisions link1="link3" link2="link4" reason="Adjacent"/>
-    <disable_collisions link1="link3" link2="pipette_holder" reason="Never"/>
+    <disable_collisions link1="link3" link2="mixer_holder" reason="Never"/>
+    <disable_collisions link1="link3" link2="pipette_holder_0" reason="Never"/>
+    <disable_collisions link1="link3" link2="pipette_holder_1" reason="Never"/>
+    <disable_collisions link1="link3" link2="station_rail" reason="Never"/>
     <disable_collisions link1="link4" link2="link5" reason="Adjacent"/>
+    <disable_collisions link1="link4" link2="mixer_holder" reason="Never"/>
+    <disable_collisions link1="link4" link2="pipette_holder_0" reason="Never"/>
+    <disable_collisions link1="link4" link2="pipette_holder_1" reason="Never"/>
+    <disable_collisions link1="link4" link2="station_rail" reason="Never"/>
     <disable_collisions link1="link5" link2="link6" reason="Adjacent"/>
+    <disable_collisions link1="link5" link2="mixer_holder" reason="Never"/>
+    <disable_collisions link1="link5" link2="pipette_holder_0" reason="Never"/>
+    <disable_collisions link1="link5" link2="pipette_holder_1" reason="Never"/>
+    <disable_collisions link1="link5" link2="station_rail" reason="Never"/>
+    <disable_collisions link1="link6" link2="mixer_holder" reason="Never"/>
+    <disable_collisions link1="link6" link2="pipette_holder_0" reason="Never"/>
+    <disable_collisions link1="link6" link2="pipette_holder_1" reason="Never"/>
+    <disable_collisions link1="link6" link2="station_rail" reason="Never"/>
+    <disable_collisions link1="mixer_holder" link2="pipette_holder_0" reason="Never"/>
+    <disable_collisions link1="mixer_holder" link2="pipette_holder_1" reason="Never"/>
+    <disable_collisions link1="mixer_holder" link2="station_rail" reason="Adjacent"/>
+    <disable_collisions link1="pipette_holder_0" link2="pipette_holder_1" reason="Never"/>
+    <disable_collisions link1="pipette_holder_0" link2="station_rail" reason="Adjacent"/>
+    <disable_collisions link1="pipette_holder_1" link2="station_rail" reason="Adjacent"/>
 </robot>

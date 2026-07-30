@@ -26,8 +26,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.dirname(HERE)
 SRC = os.path.join(PKG, "urdf", "mycobot_320_pi_2022_fork_gripper.urdf")
 STATIC_PIPETTE = "--static-pipette" in sys.argv
-OUT = os.path.join(PKG, "urdf", "mycobot_320_pi_2022_workcell.urdf")
-POSE_OUT = os.path.join(PKG, "config", "pipette_pose.yaml")
+# --rail : 3-station rail (syringe / mixer / syringe) on a 115 mm pitch.
+# Writes a SEPARATE urdf so the plain single-station workcell is untouched.
+RAIL = "--rail" in sys.argv
+SUFFIX = "_rail" if RAIL else ""
+RAIL_PITCH = 115.0
+RAIL_PLATE_T = 8.0
+MIXER_STANDOFF = 24.4      # mixer holder: mount face -> mixer axis
+MIXER_BOLT_Z = 126.5       # its bolt centreline, in its own mesh
+OUT = os.path.join(PKG, "urdf", "mycobot_320_pi_2022_workcell" + SUFFIX + ".urdf")
+POSE_OUT = os.path.join(PKG, "config", "pipette_pose" + SUFFIX + ".yaml")
+OBJ_OUT = os.path.join(PKG, "config", "objects" + SUFFIX + ".yaml")
 
 M = 0.001  # mesh units are mm
 
@@ -39,7 +48,9 @@ BAR_FACE_X = -14.13
 BAR_CENTRE_Y = -269.72   # midpoint of that bar along its length
 BAR_MID_Z = 180.0        # bar mid-height (frame revised 2026-07-29: was 250)
 HOLDER_YAW = math.pi / 2
-BORE_LOCAL = (0.0, 133.0)  # bore centre in holder x,y (cantilever holder)
+# With the rail, each holder bolts to the rail plate, so the standoff from the
+# bar face is PLATE_T + 133 rather than 133.
+BORE_LOCAL = (0.0, RAIL_PLATE_T + 133.0) if RAIL else (0.0, 133.0)
 
 
 def rotz(yaw, v):
@@ -123,15 +134,41 @@ def main():
     parts.append(joint("world_to_base", "world", "base", (0, 0, 0), (0, 0, 0)))
     parts.append(link("frame", "frame_2020.dae", (0, 0, 0), (0, 0, 0), "0.35 0.38 0.40 1"))
     parts.append(joint("world_to_frame", "world", "frame", FRAME_XYZ, (0, 0, FRAME_YAW)))
-    parts.append(link("pipette_holder", "pipette_holder_2020.dae", (0, 0, 0), (0, 0, 0),
-                      "0.85 0.45 0.10 1"))
-    parts.append(joint("frame_to_holder", "frame", "pipette_holder",
-                       (BAR_FACE_X * M, BAR_CENTRE_Y * M, BAR_MID_Z * M),
-                       (0, 0, HOLDER_YAW)))
-    # a frame at the bore centre, so the pipette node has something to hang off
-    parts.append('\n  <link name="pipette_socket"/>\n')
-    parts.append(joint("holder_to_socket", "pipette_holder", "pipette_socket",
-                       (BORE_LOCAL[0] * M, BORE_LOCAL[1] * M, 0.0), (0, 0, 0)))
+    if not RAIL:
+        parts.append(link("pipette_holder", "pipette_holder_2020.dae", (0, 0, 0), (0, 0, 0),
+                          "0.85 0.45 0.10 1"))
+        parts.append(joint("frame_to_holder", "frame", "pipette_holder",
+                           (BAR_FACE_X * M, BAR_CENTRE_Y * M, BAR_MID_Z * M),
+                           (0, 0, HOLDER_YAW)))
+        parts.append('\n  <link name="pipette_socket"/>\n')
+        parts.append(joint("holder_to_socket", "pipette_holder", "pipette_socket",
+                           (BORE_LOCAL[0] * M, BORE_LOCAL[1] * M, 0.0), (0, 0, 0)))
+    else:
+        # rail bolts to the bar exactly where the single holder used to
+        parts.append(link("station_rail", "station_rail.dae", (0, 0, 0), (0, 0, 0),
+                          "0.45 0.48 0.52 1"))
+        parts.append(joint("frame_to_rail", "frame", "station_rail",
+                           (BAR_FACE_X * M, BAR_CENTRE_Y * M, BAR_MID_Z * M),
+                           (0, 0, HOLDER_YAW)))
+        # two syringe stations, bolted to the rail plate at +-pitch
+        for i, sx in ((0, -1), (1, 1)):
+            hn, sn = "pipette_holder_%d" % i, "pipette_socket_%d" % i
+            parts.append(link(hn, "pipette_holder_2020.dae", (0, 0, 0), (0, 0, 0),
+                              "0.85 0.45 0.10 1"))
+            parts.append(joint("rail_to_" + hn, "station_rail", hn,
+                               (sx * RAIL_PITCH * M, RAIL_PLATE_T * M, 0.0), (0, 0, 0)))
+            parts.append('\n  <link name="%s"/>\n' % sn)
+            parts.append(joint(hn + "_to_" + sn, hn, sn, (0.0, 133.0 * M, 0.0), (0, 0, 0)))
+        # mixer station in the centre. Its mesh has the flange face at y=-24.4 and
+        # the bolt centreline at z=+126.5, so shift by those to seat it on the boss.
+        parts.append(link("mixer_holder", "mixer_holder.dae", (0, 0, 0), (0, 0, 0),
+                          "0.80 0.35 0.35 1"))
+        parts.append(joint("rail_to_mixer_holder", "station_rail", "mixer_holder",
+                           (0.0, BORE_LOCAL[1] * M, -MIXER_BOLT_Z * M), (0, 0, 0)))
+        # mixer and holder share one assembly frame, so the socket is the holder origin
+        parts.append('\n  <link name="mixer_socket"/>\n')
+        parts.append(joint("mixer_holder_to_socket", "mixer_holder", "mixer_socket",
+                           (0, 0, 0), (0, 0, 0)))
 
     # The pipette is published by tools/pipette_attach.py as a TF frame plus an
     # RViz Marker, not as a URDF link -- a URDF joint's parent is fixed at parse
@@ -170,6 +207,22 @@ def main():
         fh.write("held_rpy: [%.5f, %.5f, %.5f]\n" % PIP_RPY)
         fh.write("tip_up: %s\n" % ("true" if TIP_UP else "false"))
     print("wrote", POSE_OUT)
+    if RAIL:
+        with open(OBJ_OUT, "w") as fh:
+            fh.write("# generated by build_workcell.py --rail - do not edit\n")
+            fh.write("objects:\n")
+            for i in (0, 1):
+                fh.write("  - name: pipette_%d\n" % i)
+                fh.write("    socket: pipette_socket_%d\n" % i)
+                fh.write("    mesh: assembled_pipette.dae\n")
+                fh.write("    xyz: [%.5f, %.5f, %.5f]\n" % xyz)
+                fh.write("    rpy: [%.5f, %.5f, %.5f]\n" % PIP_RPY)
+            fh.write("  - name: mixer\n")
+            fh.write("    socket: mixer_socket\n")
+            fh.write("    mesh: assembled_mixer.dae\n")
+            fh.write("    xyz: [0.0, 0.0, 0.0]\n")
+            fh.write("    rpy: [0.0, 0.0, 0.0]\n")
+        print("wrote", OBJ_OUT, "(3 movable objects)")
     print("  held_xyz", tuple(round(v, 5) for v in xyz), " held_rpy",
           tuple(round(v, 5) for v in PIP_RPY))
     print("wrote", OUT)
