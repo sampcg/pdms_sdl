@@ -203,6 +203,17 @@ Visualization Manager:
       Value: /pipette/marker
     Namespaces: {}
     Value: true
+  - Class: rviz_default_plugins/Marker
+    Enabled: true
+    Name: Pipette 2
+    Topic:
+      Depth: 5
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /pipette/marker
+    Namespaces: {}
+    Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

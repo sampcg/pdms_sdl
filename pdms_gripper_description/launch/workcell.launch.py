@@ -30,6 +30,9 @@ def generate_launch_description():
         default_value=os.path.join(pkg, "config", "workcell.rviz"),
     )
     gui_arg = DeclareLaunchArgument(name="gui", default_value="true")
+    sockets_arg = DeclareLaunchArgument(
+        name="sockets", default_value="[pipette_socket]",
+        description="socket frames, one per station, e.g. [pipette_socket_0,pipette_socket_1]")
     seq_arg = DeclareLaunchArgument(
         name="sequence", default_value="false",
         description="true = run the timed pick-and-place instead of the sliders")
@@ -43,6 +46,7 @@ def generate_launch_description():
         rviz_arg,
         gui_arg,
         seq_arg,
+        sockets_arg,
         Node(
             package="robot_state_publisher",
             executable="robot_state_publisher",
@@ -63,7 +67,8 @@ def generate_launch_description():
                  "'=='true' and '", LaunchConfiguration("sequence"), "'!='true' else 'false'"])),
         ),
         ExecuteProcess(
-            cmd=["python3", os.path.join(pkg, "tools", "pipette_attach.py")],
+            cmd=["python3", os.path.join(pkg, "tools", "pipette_attach.py"),
+                 "--ros-args", "-p", ["sockets:=", LaunchConfiguration("sockets")]],
             name="pipette_attach",
             output="screen",
         ),

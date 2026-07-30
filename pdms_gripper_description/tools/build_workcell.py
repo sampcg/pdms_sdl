@@ -25,10 +25,23 @@ import math
 HERE = os.path.dirname(os.path.abspath(__file__))
 PKG = os.path.dirname(HERE)
 SRC = os.path.join(PKG, "urdf", "mycobot_320_pi_2022_fork_gripper.urdf")
-OUT = os.path.join(PKG, "urdf", "mycobot_320_pi_2022_workcell.urdf")
-POSE_OUT = os.path.join(PKG, "config", "pipette_pose.yaml")
-
 STATIC_PIPETTE = "--static-pipette" in sys.argv
+# --clip : use the generated horizontal-extraction holder and write a SEPARATE
+# urdf, leaving the original workcell file and the original holder mesh alone.
+CLIP = "--clip" in sys.argv
+# --stations N : how many holder/syringe stations along the crossbar.
+# Bores sit at +-PITCH/2 either side of the frame centreline, each holder yawed
+# so its clip opening points at the robot base - otherwise horizontal extraction
+# from an off-centre station pulls at an angle to the clip axis and binds.
+try:
+    N_STATIONS = int(sys.argv[sys.argv.index("--stations") + 1])
+except (ValueError, IndexError):
+    N_STATIONS = 1
+STATION_PITCH = 0.110      # >= 102 mm: gripper envelope 140 mm + 45 mm body + clearance
+HOLDER_MESH = "pipette_holder_cantilever_clip.dae" if CLIP else "pipette_holder_2020.dae"
+SUFFIX = ("_clip" if CLIP else "") + ("_x%d" % N_STATIONS if N_STATIONS > 1 else "")
+OUT = os.path.join(PKG, "urdf", "mycobot_320_pi_2022_workcell" + SUFFIX + ".urdf")
+POSE_OUT = os.path.join(PKG, "config", "pipette_pose" + SUFFIX + ".yaml")
 
 M = 0.001  # mesh units are mm
 
@@ -115,6 +128,9 @@ def joint(name, parent, child, xyz, rpy, jtype="fixed"):
 """
 
 
+STATION_REPORT = []
+
+
 def main():
     urdf = open(SRC).read()
 
@@ -124,15 +140,33 @@ def main():
     parts.append(joint("world_to_base", "world", "base", (0, 0, 0), (0, 0, 0)))
     parts.append(link("frame", "frame_2020.dae", (0, 0, 0), (0, 0, 0), "0.35 0.38 0.40 1"))
     parts.append(joint("world_to_frame", "world", "frame", FRAME_XYZ, (0, 0, FRAME_YAW)))
-    parts.append(link("pipette_holder", "pipette_holder_2020.dae", (0, 0, 0), (0, 0, 0),
-                      "0.85 0.45 0.10 1"))
-    parts.append(joint("frame_to_holder", "frame", "pipette_holder",
-                       (BAR_FACE_X * M, BAR_CENTRE_Y * M, BAR_MID_Z * M),
-                       (0, 0, HOLDER_YAW)))
-    # a frame at the bore centre, so the pipette node has something to hang off
-    parts.append('\n  <link name="pipette_socket"/>\n')
-    parts.append(joint("holder_to_socket", "pipette_holder", "pipette_socket",
-                       (BORE_LOCAL[0] * M, BORE_LOCAL[1] * M, 0.0), (0, 0, 0)))
+    # --- stations -----------------------------------------------------------
+    # Place each holder by its BORE target (not its flange), so the bore lands
+    # exactly on the arc regardless of how much the holder is yawed.
+    reach = BORE_IN_BASE[1]
+    xs = [(i - (N_STATIONS - 1) / 2.0) * STATION_PITCH for i in range(N_STATIONS)]
+    for i, xb in enumerate(xs):
+        bore_w = (xb, reach, BORE_IN_BASE[2])
+        # clip opening must point from the bore towards the robot base
+        d = (-bore_w[0], -bore_w[1])
+        dn = math.hypot(*d) or 1.0
+        d = (d[0] / dn, d[1] / dn)
+        yaw_w = math.atan2(-d[0], d[1])           # local +y -> d
+        off = rotz(yaw_w, (0.0, BORE_LOCAL[1] * M, 0.0))
+        org_w = tuple(bore_w[k] - off[k] for k in range(3))
+        # world -> frame
+        rel = tuple(org_w[k] - FRAME_XYZ[k] for k in range(3))
+        org_f = rotz(-FRAME_YAW, rel)
+        suffix = "" if N_STATIONS == 1 else "_%d" % i
+        hname = "pipette_holder" + suffix
+        sname = "pipette_socket" + suffix
+        parts.append(link(hname, HOLDER_MESH, (0, 0, 0), (0, 0, 0), "0.85 0.45 0.10 1"))
+        parts.append(joint("frame_to_" + hname, "frame", hname, org_f,
+                           (0, 0, yaw_w - FRAME_YAW)))
+        parts.append('\n  <link name="%s"/>\n' % sname)
+        parts.append(joint(hname + "_to_" + sname, hname, sname,
+                           (BORE_LOCAL[0] * M, BORE_LOCAL[1] * M, 0.0), (0, 0, 0)))
+        STATION_REPORT.append((i, bore_w, math.degrees(yaw_w - math.pi / 2)))
 
     # The pipette is published by tools/pipette_attach.py as a TF frame plus an
     # RViz Marker, not as a URDF link -- a URDF joint's parent is fixed at parse
@@ -174,6 +208,9 @@ def main():
     print("  held_xyz", tuple(round(v, 5) for v in xyz), " held_rpy",
           tuple(round(v, 5) for v in PIP_RPY))
     print("wrote", OUT)
+    for i, b, fan in STATION_REPORT:
+        print("  station %d: bore world (%.3f, %.3f, %.3f)  clip fan %+.1f deg"
+              % (i, b[0], b[1], b[2], fan))
     print("  frame origin in base frame :", tuple(round(v, 5) for v in FRAME_XYZ))
     print("  bore in base frame         :", BORE_IN_BASE)
     print("  pipette origin z (mm)      :", round(pip_z, 2))

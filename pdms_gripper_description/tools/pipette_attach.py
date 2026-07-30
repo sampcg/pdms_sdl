@@ -24,7 +24,7 @@ import os
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Int32
 from geometry_msgs.msg import TransformStamped
 from visualization_msgs.msg import Marker
 from tf2_ros import Buffer, TransformBroadcaster, TransformListener
@@ -74,6 +74,9 @@ def quat_from_rpy(r, p, y):
 class PipetteAttach(Node):
     def __init__(self):
         super().__init__("pipette_attach")
+        # One entry per station. Default keeps the original single-pipette
+        # behaviour; a 2-station workcell passes both socket frames.
+        self.declare_parameter("sockets", ["pipette_socket"])
         self.declare_parameter("held_frame", "pipette_socket")
         self.declare_parameter("grasp_frame", "gripper_base")
         held_xyz, held_rpy = _load_pose()
@@ -83,6 +86,10 @@ class PipetteAttach(Node):
         self.declare_parameter("grasp_rpy", GRASP_RPY)
         self.declare_parameter("max_grasp_distance", 0.15)
 
+        self.sockets = list(self.get_parameter("sockets").value)
+        self.n = len(self.sockets)
+        self.held = [None] * self.n      # captured grasp tf per pipette
+        self.grasped = -1                # index currently in the gripper, or -1
         self.attached = False
         # Captured at the instant of the grasp: the pipette's pose relative to
         # gripper_base right then. Using this instead of a hardcoded offset
@@ -94,23 +101,40 @@ class PipetteAttach(Node):
         self.br = TransformBroadcaster(self)
         self.marker_pub = self.create_publisher(Marker, "/pipette/marker", 1)
         self.create_subscription(Bool, "/pipette/attach", self.on_attach, 1)
+        self.create_subscription(Int32, "/pipette/grasp", self.on_grasp, 1)
         self.create_timer(1.0 / 30.0, self.tick)
-        self.get_logger().info("pipette in holder; publish /pipette/attach to grasp")
+        self.get_logger().info(
+            "%d pipette(s) in holders: %s" % (self.n, ", ".join(self.sockets)))
+        self.get_logger().info(
+            "publish /pipette/grasp (Int32: index, -1 = release)")
 
     def on_attach(self, msg):
-        if msg.data == self.attached:
-            return
-        if msg.data:
-            self.grasp_tf = self.capture_grasp()
-        self.attached = msg.data
-        self.get_logger().info("pipette %s" % ("GRASPED" if msg.data else "RELEASED"))
+        """Back-compatible single-pipette toggle: acts on station 0."""
+        self.on_grasp(Int32(data=(0 if msg.data else -1)))
 
-    def capture_grasp(self):
-        """Pose of `pipette` in `gripper_base` at this moment, via TF."""
+    def on_grasp(self, msg):
+        """Index of the pipette to hold, or -1 to release."""
+        i = int(msg.data)
+        if i == self.grasped:
+            return
+        if i >= self.n:
+            self.get_logger().warn("no station %d (have %d)" % (i, self.n))
+            return
+        if i >= 0:
+            self.held[i] = self.capture_grasp(self.frame_name(i))
+        self.grasped = i
+        self.attached = i >= 0
+        self.get_logger().info("pipette %s" % ("GRASPED #%d" % i if i >= 0 else "RELEASED"))
+
+    def frame_name(self, i):
+        return "pipette" if self.n == 1 else "pipette_%d" % i
+
+    def capture_grasp(self, child):
+        """Pose of `child` in `gripper_base` at this moment, via TF."""
         import rclpy.time
         try:
             t = self.tf_buffer.lookup_transform(
-                self.get_parameter("grasp_frame").value, "pipette",
+                self.get_parameter("grasp_frame").value, child,
                 rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=0.5))
         except Exception as e:
             self.get_logger().warn("grasp capture failed (%s); using default offset" % e)
@@ -137,27 +161,23 @@ class PipetteAttach(Node):
         return list(self.get_parameter(n).value)
 
     def tick(self):
-        if self.attached and self.grasp_tf is not None:
-            parent = self.get_parameter("grasp_frame").value
-            xyz, quat = self.grasp_tf
-            self.send(parent, xyz, quat)
-            self.publish_marker()
-            return
-        if self.attached:
-            parent = self.get_parameter("grasp_frame").value
-            xyz, rpy = self._p("grasp_xyz"), self._p("grasp_rpy")
-        else:
-            parent = self.get_parameter("held_frame").value
-            xyz, rpy = self._p("held_xyz"), self._p("held_rpy")
+        held_xyz, held_rpy = self._p("held_xyz"), self._p("held_rpy")
+        gframe = self.get_parameter("grasp_frame").value
+        for i, sock in enumerate(self.sockets):
+            child = self.frame_name(i)
+            if i == self.grasped and self.held[i] is not None:
+                xyz, quat = self.held[i]
+                self.send(gframe, xyz, quat, child)
+            else:
+                self.send(sock, held_xyz,
+                          quat_from_rpy(*[float(v) for v in held_rpy]), child)
+            self.publish_marker(child, i)
 
-        self.send(parent, xyz, quat_from_rpy(*[float(v) for v in rpy]))
-        self.publish_marker()
-
-    def send(self, parent, xyz, quat):
+    def send(self, parent, xyz, quat, child="pipette"):
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = parent
-        t.child_frame_id = "pipette"
+        t.child_frame_id = child
         t.transform.translation.x = float(xyz[0])
         t.transform.translation.y = float(xyz[1])
         t.transform.translation.z = float(xyz[2])
@@ -165,13 +185,13 @@ class PipetteAttach(Node):
         t.transform.rotation.z, t.transform.rotation.w = float(quat[2]), float(quat[3])
         self.br.sendTransform(t)
 
-    def publish_marker(self):
+    def publish_marker(self, child="pipette", idx=0):
         now = self.get_clock().now().to_msg()
         m = Marker()
-        m.header.frame_id = "pipette"
+        m.header.frame_id = child
         m.header.stamp = now
         m.ns = "pipette"
-        m.id = 0
+        m.id = idx
         m.type = Marker.MESH_RESOURCE
         m.action = Marker.ADD
         m.mesh_resource = MESH

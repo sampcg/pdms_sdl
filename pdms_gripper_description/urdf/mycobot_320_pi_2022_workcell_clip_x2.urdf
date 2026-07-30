@@ -373,29 +373,55 @@
     <origin xyz="0.26972 -0.55713 0.00000" rpy="0.00000 0.00000 -1.57080"/>
   </joint>
 
-  <link name="pipette_holder">
+  <link name="pipette_holder_0">
     <visual>
-      <geometry><mesh filename="package://pdms_gripper_description/meshes/pipette_holder_2020.dae"/></geometry>
+      <geometry><mesh filename="package://pdms_gripper_description/meshes/pipette_holder_cantilever_clip.dae"/></geometry>
       <origin xyz="0.00000 0.00000 0.00000" rpy="0.00000 0.00000 0.00000"/>
-    <material name="pipette_holder_mat"><color rgba="0.85 0.45 0.10 1"/></material>
+    <material name="pipette_holder_0_mat"><color rgba="0.85 0.45 0.10 1"/></material>
     </visual>
     <collision>
-      <geometry><mesh filename="package://pdms_gripper_description/meshes/pipette_holder_2020.dae" scale="0.001 0.001 0.001"/></geometry>
+      <geometry><mesh filename="package://pdms_gripper_description/meshes/pipette_holder_cantilever_clip.dae" scale="0.001 0.001 0.001"/></geometry>
       <origin xyz="0.00000 0.00000 0.00000" rpy="0.00000 0.00000 0.00000"/>
     </collision>
   </link>
 
-  <joint name="frame_to_pipette_holder" type="fixed">
+  <joint name="frame_to_pipette_holder_0" type="fixed">
     <parent link="frame"/>
-    <child link="pipette_holder"/>
-    <origin xyz="-0.01413 -0.26972 0.18000" rpy="0.00000 0.00000 1.57080"/>
+    <child link="pipette_holder_0"/>
+    <origin xyz="-0.01531 -0.34240 0.18000" rpy="0.00000 0.00000 1.43745"/>
   </joint>
 
-  <link name="pipette_socket"/>
+  <link name="pipette_socket_0"/>
 
-  <joint name="pipette_holder_to_pipette_socket" type="fixed">
-    <parent link="pipette_holder"/>
-    <child link="pipette_socket"/>
+  <joint name="pipette_holder_0_to_pipette_socket_0" type="fixed">
+    <parent link="pipette_holder_0"/>
+    <child link="pipette_socket_0"/>
+    <origin xyz="0.00000 0.13300 0.00000" rpy="0.00000 0.00000 0.00000"/>
+  </joint>
+
+  <link name="pipette_holder_1">
+    <visual>
+      <geometry><mesh filename="package://pdms_gripper_description/meshes/pipette_holder_cantilever_clip.dae"/></geometry>
+      <origin xyz="0.00000 0.00000 0.00000" rpy="0.00000 0.00000 0.00000"/>
+    <material name="pipette_holder_1_mat"><color rgba="0.85 0.45 0.10 1"/></material>
+    </visual>
+    <collision>
+      <geometry><mesh filename="package://pdms_gripper_description/meshes/pipette_holder_cantilever_clip.dae" scale="0.001 0.001 0.001"/></geometry>
+      <origin xyz="0.00000 0.00000 0.00000" rpy="0.00000 0.00000 0.00000"/>
+    </collision>
+  </link>
+
+  <joint name="frame_to_pipette_holder_1" type="fixed">
+    <parent link="frame"/>
+    <child link="pipette_holder_1"/>
+    <origin xyz="-0.01531 -0.19704 0.18000" rpy="0.00000 0.00000 1.70415"/>
+  </joint>
+
+  <link name="pipette_socket_1"/>
+
+  <joint name="pipette_holder_1_to_pipette_socket_1" type="fixed">
+    <parent link="pipette_holder_1"/>
+    <child link="pipette_socket_1"/>
     <origin xyz="0.00000 0.13300 0.00000" rpy="0.00000 0.00000 0.00000"/>
   </joint>
 
