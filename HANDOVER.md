@@ -19,7 +19,7 @@ single-station URDF parents the markers to sockets that do not exist.
 Grasp an object: `ros2 topic pub --once /pipette/grasp std_msgs/Int32 "{data: 0}"`
 (0 = left syringe, 1 = right syringe, 2 = mixer, -1 = release)
 
-**Rail scene under MoveIt, collision-checked (arm works, gripper visual broken):**
+**Rail scene under MoveIt, collision-checked (fully working):**
 ```bash
 source /home/samuel/colcon_ws/install/setup.bash && ros2 launch pdms_320_moveit pick_place.launch.py station:=0
 ```
@@ -31,32 +31,32 @@ source /home/samuel/colcon_ws/install/setup.bash && ros2 launch pdms_320_moveit 
 pkill -9 -f rviz; pkill -9 -f robot_state_publisher; pkill -9 -f move_group; pkill -9 -f pipette_attach; pkill -9 -f ros2_control_node
 ```
 
-## THE ONE OPEN BUG
+## No open bugs
 
-Under MoveIt, `gripper_controller` reports **out-of-limit positive values**
-(+0.65 when its URDF limit is `lower=-1.11 upper=0`), and all five mimic joints
-report the *same* value regardless of their multipliers (+1.0 / -1.0).
+An earlier version of this file reported a gripper mimic-joint bug. **That bug
+did not exist** - the diagnostic was wrong, not the robot.
 
-- The **arm plans and executes correctly** — all 10 cycle steps return ok, and
-  the collision matrix is respected. Verified: `gripper_base` TF moves, 93+
-  successful steps.
-- Only the **gripper's visual state** is wrong under MoveIt. The fork fingers
-  will look wrong / over-travelled in RViz.
-- The spline sequence (`workcell_sequence.py`) is unaffected and correct.
+The check parsed `ros2 topic echo /joint_states` with `x.strip('- \n')`, which
+strips the leading YAML list dash *and the minus sign*. Every negative joint
+value was reported as positive, so `gripper_controller` at its normal `-0.65`
+looked like `+0.65` and therefore "outside its `-1.11..0` limit".
 
-**What I tried:** removed `<command_interface>` from the mimic joints in
-`pdms_320_moveit/config/firefighter.urdf.xacro` (a mimic joint should be driven
-by its source, not commanded). Did not fix it.
+Verified properly by subscribing to `/joint_states` with rclpy:
 
-**Where to look next:**
-1. `mock_components/GenericSystem` in Humble may not honour `<param name="mimic">`
-   at all. Test by removing the 5 mimic joints from the `ros2_control` block
-   entirely and see whether `gripper_controller` then stays in range.
-2. If GenericSystem is the problem, the fallback is to drop the mimic joints from
-   ros2_control and publish them from a small node that reads
-   `gripper_controller` off `/joint_states` and republishes the 5 derived values.
-3. `gripper_controller_ctrl` in `config/ros2_controllers.yaml` controls only
-   `gripper_controller`; that part is correct.
+```
+gripper_controller                 -0.6618   in range
+gripper_base_to_gripper_left2      -0.6618   x +1.0   OK
+gripper_left3_to_gripper_left1     +0.6618   x -1.0   OK
+gripper_base_to_gripper_right3     +0.6618   x -1.0   OK
+gripper_base_to_gripper_right2     +0.6618   x -1.0   OK
+gripper_right3_to_gripper_right1   -0.6618   x +1.0   OK
+```
+
+`mock_components/GenericSystem` honours `<param name="mimic">` and
+`<param name="multiplier">` correctly. The MoveIt path is fully working.
+
+**Lesson:** never parse `ros2 topic echo` output with string stripping. Subscribe
+with rclpy, or use `ros2 topic echo --field`.
 
 ## What works and is verified
 
