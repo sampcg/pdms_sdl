@@ -385,7 +385,7 @@
     </collision>
   </link>
 
-  <joint name="frame_to_pipette_holder" type="fixed">
+  <joint name="frame_to_holder" type="fixed">
     <parent link="frame"/>
     <child link="pipette_holder"/>
     <origin xyz="-0.01413 -0.26972 0.18000" rpy="0.00000 0.00000 1.57080"/>
@@ -393,7 +393,7 @@
 
   <link name="pipette_socket"/>
 
-  <joint name="pipette_holder_to_pipette_socket" type="fixed">
+  <joint name="holder_to_socket" type="fixed">
     <parent link="pipette_holder"/>
     <child link="pipette_socket"/>
     <origin xyz="0.00000 0.13300 0.00000" rpy="0.00000 0.00000 0.00000"/>
