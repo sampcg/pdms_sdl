@@ -25,7 +25,12 @@ def generate_launch_description():
     # link, so the MoveIt demo needs it started explicitly or nothing shows up.
     desc = get_package_share_directory("pdms_gripper_description")
     ld.add_action(ExecuteProcess(
-        cmd=["python3", os.path.join(desc, "tools", "pipette_attach.py")],
+        cmd=["python3", os.path.join(desc, "tools", "pipette_attach.py"),
+             # the MoveIt config describes the RAIL scene, whose sockets are
+             # pipette_socket_0/1 and mixer_socket - without this manifest the
+             # node falls back to a single "pipette_socket" that does not exist
+             # here, and nothing is drawn
+             "--ros-args", "-p", "objects:=objects_rail.yaml"],
         name="pipette_attach",
         output="screen",
     ))
