@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<!-- Generated from Fusion design assembled_20_ml_iter2_urdf. Units: metres, kg. -->
+<robot name="assembled_20_ml">
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0.000310124 0.0864885 -0.00275189" rpy="0 0 0"/>
+      <mass value="0.180464"/>
+      <inertia ixx="0.000602147" ixy="2.75766e-06" ixz="4.17851e-07" iyy="5.76615e-05" iyz="3.32555e-05" izz="0.000599201"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://assembled_20_ml_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/></geometry>
+      <material name="base_link_color"><color rgba="0.8 0.8 0.8 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="package://assembled_20_ml_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/></geometry>
+    </collision>
+  </link>
+  <link name="plunger_link">
+    <inertial>
+      <origin xyz="3.57424e-06 -0.0818269 0.0177129" rpy="0 0 0"/>
+      <mass value="0.057213"/>
+      <inertia ixx="0.000240312" ixy="5.86376e-09" ixz="3.62195e-09" iyy="1.38381e-05" iyz="1.67261e-05" izz="0.000232939"/>
+    </inertial>
+    <visual>
+      <origin xyz="-0 -0.1744 0.01" rpy="0 0 0"/>
+      <geometry><mesh filename="package://assembled_20_ml_description/meshes/plunger_link.stl" scale="0.001 0.001 0.001"/></geometry>
+      <material name="plunger_link_color"><color rgba="0.2 0.4 0.8 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="-0 -0.1744 0.01" rpy="0 0 0"/>
+      <geometry><mesh filename="package://assembled_20_ml_description/meshes/plunger_link.stl" scale="0.001 0.001 0.001"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="plunger_joint" type="prismatic">
+    <parent link="base_link"/>
+    <child link="plunger_link"/>
+    <origin xyz="0 0.1744 -0.01" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0" upper="0.06" effort="100" velocity="0.02"/>
+  </joint>
+</robot>
